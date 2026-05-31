@@ -1,0 +1,6 @@
+var num =0;
+num++;
+num+=1;
+
+// Error at '+': Expect expression.
+// Error at '=': Expect expression.
