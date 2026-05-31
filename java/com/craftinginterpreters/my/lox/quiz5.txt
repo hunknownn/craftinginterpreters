@@ -1,0 +1,42 @@
+[1]
+expr -> expr calls
+expr -> IDENTIFIER
+expr -> NUMBER
+
+calls -> calls call
+calls -> call
+
+call -> "(" ")"
+call -> "(" some ")"
+call -> "." IDENTIFIER
+
+some -> expr
+some -> some "," expr
+
+---
+foo()
+foo(1)
+foo(1,2,3)
+foo.a
+foo.b
+foo.a.b.c
+foo(1).a
+foo.a
+
+
+expr == identifier
+expr == 123
+expr == 123 calls
+expr == identifier calls
+
+calls ==
+calls == ()
+
+call == ()
+call == (some)
+call == .identifier
+
+some == expr
+some == some, expr
+
+[2]
