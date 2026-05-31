@@ -11,6 +11,7 @@ import java.util.List;
 public class Lox {
 
     static boolean hadError = false;
+    static Scanner scanner = new Scanner();
 
     public static void main(String[] args) throws IOException {
         if (args.length > 1) {
@@ -46,8 +47,7 @@ public class Lox {
     }
 
     private static void run(String source) {
-        Scanner scanner = new Scanner(source);
-        List<Token> tokens = scanner.scanTokens();
+        List<Token> tokens = scanner.scanTokens(source);
 
         for (Token token : tokens) {
             System.out.println(token);
