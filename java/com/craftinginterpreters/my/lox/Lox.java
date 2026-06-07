@@ -53,7 +53,7 @@ public class Lox {
 
         if(hadError) return;
 
-        System.out.println(new AstPrinter().print(expression));1+
+        System.out.println(new AstPrinter().print(expression));
 
         for (Token token : tokens) {
             System.out.println(token);
