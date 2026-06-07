@@ -192,13 +192,22 @@ class Scanner {
             advance();
         }
 
+        boolean isFloatingPoint = false;
         if (peek() == '.' && isDigit(peekNext())) {
+            isFloatingPoint = true;
             advance();
 
             while (isDigit(peek())) advance();
         }
 
-        addToken(NUMBER, Double.parseDouble(source.substring(start, current)));
+        String text = source.substring(start, current);
+        Object literal;
+        if (isFloatingPoint) {
+            literal = Double.parseDouble(text);
+        } else {
+            literal = Long.parseLong(text);
+        }
+        addToken(NUMBER, literal);
     }
 
     private char peekNext() {

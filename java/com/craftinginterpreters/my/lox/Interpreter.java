@@ -44,7 +44,8 @@ class Interpreter implements Expr.Visitor<Object> {
                 return !isTruthy(right);
             case MINUS:
                 checkNumberOperand(expr.operator, right);
-                return -(double) right;
+                if (right instanceof Long) return -((Long) right);
+                return -toDouble(right);
         }
 
         return null;
@@ -62,29 +63,35 @@ class Interpreter implements Expr.Visitor<Object> {
                 return isEqual(left, right);
             case GREATER:
                 checkNumberOperands(expr.operator, left, right);
-                return (double) left > (double) right;
+                return toDouble(left) > toDouble(right);
             case GREATER_EQUAL:
                 checkNumberOperands(expr.operator, left, right);
-                return (double) left >= (double) right;
+                return toDouble(left) >= toDouble(right);
             case LESS:
                 checkNumberOperands(expr.operator, left, right);
-                return (double) left < (double) right;
+                return toDouble(left) < toDouble(right);
             case LESS_EQUAL:
                 checkNumberOperands(expr.operator, left, right);
-                return (double) left <= (double) right;
+                return toDouble(left) <= toDouble(right);
             case MINUS:
                 checkNumberOperands(expr.operator, left, right);
-                return (double) left - (double) right;
+                if (left instanceof Long && right instanceof Long) {
+                    return (Long) left - (Long) right;
+                }
+                return toDouble(left) - toDouble(right);
             case PLUS:
-                if (left instanceof Double && right instanceof Double) {
-                    return (double) left + (double) right;
+                if (left instanceof Number && right instanceof Number) {
+                    if (left instanceof Long && right instanceof Long) {
+                        return (Long) left + (Long) right;
+                    }
+                    return toDouble(left) + toDouble(right);
                 }
 
                 if (left instanceof String && right instanceof String) {
                     return (String) left + (String) right;
                 }
 
-                if ((left instanceof String && right instanceof Double) || (left instanceof Double && right instanceof String)) {
+                if ((left instanceof String && right instanceof Number) || (left instanceof Number && right instanceof String)) {
                     return stringify(left) + stringify(right);
                 }
 
@@ -92,10 +99,19 @@ class Interpreter implements Expr.Visitor<Object> {
                         "Operands must be two numbers or two strings.");
             case SLASH:
                 checkNumberOperands(expr.operator, left, right);
-                return (double) left / (double) right;
+                if (left instanceof Long && right instanceof Long && (Long) right == 0L) {
+                    throw new RuntimeError(expr.operator, "Division by zero.");
+                }
+                if (left instanceof Long && right instanceof Long) {
+                    return (Long) left / (Long) right;
+                }
+                return toDouble(left) / toDouble(right); // 실수형 연산
             case STAR:
                 checkNumberOperands(expr.operator, left, right);
-                return (double) left * (double) right;
+                if (left instanceof Long && right instanceof Long) {
+                    return (Long) left * (Long) right;
+                }
+                return toDouble(left) * toDouble(right);
         }
 
         return null;
@@ -115,14 +131,18 @@ class Interpreter implements Expr.Visitor<Object> {
     }
 
     private void checkNumberOperand(Token operator, Object operand) {
-        if (operand instanceof Double) return;
+        if (operand instanceof Number) return;
         throw new RuntimeError(operator, "Operand must be a number.");
     }
 
     private void checkNumberOperands(Token operator,
                                      Object left, Object right) {
-        if (left instanceof Double && right instanceof Double) return;
+        if (left instanceof Number && right instanceof Number) return;
         throw new RuntimeError(operator, "Operands must be numbers.");
+    }
+
+    private double toDouble(Object value) {
+        return ((Number) value).doubleValue();
     }
 
     private boolean isTruthy(Object object) {

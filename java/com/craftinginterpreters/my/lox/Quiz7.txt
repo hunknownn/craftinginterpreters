@@ -1,0 +1,12 @@
+[1]
+안한다.
+Java도 안한다.
+- 숫자간 비교 허용
+- 문자열 간 비교 허용 (사전 순 정렬 필요)
+- Boolean 불가
+- Object 간 비교, 등은 사용자에게 구현 위임(Comparator)
+
+[3]
+Infinity 출력된다.
+에러가 발생해야한다.
+java에서는 정수형은 ArithmeticException, d실수형은 infinity, 0/0은 NaN

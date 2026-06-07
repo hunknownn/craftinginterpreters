@@ -32,6 +32,11 @@ public class Lox {
 
         if (hadError) System.exit(65);
         if (hadRuntimeError) System.exit(70); // 65, 70 뭐지?
+
+        /*
+          man sysexits 으로 system code 볼 수 있음
+          os 마다 다름
+         */
     }
 
     private static void runPrompt() throws IOException {
