@@ -29,6 +29,13 @@ class RpnPrinter implements Expr.Visitor<String> {
         return expr.right.accept(this) + " " + expr.operator.lexeme;
     }
 
+    @Override
+    public String visitConditionalExpr(Expr.Conditional expr) {
+        return expr.condition.accept(this) + " "
+                + expr.thenExpr.accept(this) + " "
+                + expr.elseExpr.accept(this) + " ?:";
+    }
+
     public static void main(String[] args) {
         Expr expression = new Expr.Binary(
                 new Expr.Unary(
