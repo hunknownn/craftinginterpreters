@@ -125,7 +125,41 @@ class Parser {
             return new Expr.Grouping(expr);
         }
 
-        // 여기 if 안걸렸을때의 처리가 없음
+        // 왼쪽 피연산자 없이 이항 연산자가 등장한 경우를 처리하는 에러 production.
+        // 연산자를 보고하고, 오른쪽 피연산자를 해당 우선순위로 파싱해서 버린 뒤 에러를 던진다.
+        if (match(COMMA)) {
+            error(previous(), "Binary operator ',' has no left-hand operand.");
+            conditional();
+            return null;
+        }
+
+        if (match(BANG_EQUAL, EQUAL_EQUAL)) {
+            Token operator = previous();
+            error(operator, "Binary operator '" + operator.lexeme + "' has no left-hand operand.");
+            comparison();
+            return null;
+        }
+
+        if (match(GREATER, GREATER_EQUAL, LESS, LESS_EQUAL)) {
+            Token operator = previous();
+            error(operator, "Binary operator '" + operator.lexeme + "' has no left-hand operand.");
+            term();
+            return null;
+        }
+
+        if (match(PLUS)) {
+            error(previous(), "Binary operator '+' has no left-hand operand.");
+            factor();
+            return null;
+        }
+
+        if (match(SLASH, STAR)) {
+            Token operator = previous();
+            error(operator, "Binary operator '" + operator.lexeme + "' has no left-hand operand.");
+            unary();
+            return null;
+        }
+
         throw error(peek(), "Expect expression. ");
     }
 
