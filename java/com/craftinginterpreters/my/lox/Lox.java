@@ -28,7 +28,7 @@ public class Lox {
 
     private static void runFile(String path) throws IOException {
         byte[] bytes = Files.readAllBytes(Paths.get(path));
-        run(new String(bytes, Charset.defaultCharset()));
+        run(new String(bytes, Charset.defaultCharset()), false);
 
         if (hadError) System.exit(65);
         if (hadRuntimeError) System.exit(70); // 65, 70 뭐지?
@@ -49,13 +49,28 @@ public class Lox {
             if (line == null) {
                 break;
             }
-            run(line);
+            run(line, true);
             hadError = false;
         }
     }
 
-    private static void run(String source) {
+    private static void run(String source, boolean repl) {
         List<Token> tokens = scanner.scanTokens(source);
+
+        // REPL이고 세미콜론이 없으면 → 단일 식으로 보고 결과를 자동 출력.
+        if (repl && !hasSemicolon(tokens)) {
+            // 빈 줄(EOF 토큰만 있는 경우)은 무시.
+            if (tokens.size() <= 1) return;
+
+            Parser parser = new Parser(tokens);
+            Expr expr = parser.parseExpression();
+
+            if (hadError) return;
+
+            interpreter.interpret(expr);
+            return;
+        }
+
         Parser parser = new Parser(tokens);
         List<Stmt> statements = parser.parse();
 
@@ -74,6 +89,13 @@ public class Lox {
         System.out.println("----------------------------------");
         System.out.println();
         System.out.println();
+    }
+
+    private static boolean hasSemicolon(List<Token> tokens) {
+        for (Token token : tokens) {
+            if (token.type == TokenType.SEMICOLON) return true;
+        }
+        return false;
     }
 
     static void error(int line, String message) {

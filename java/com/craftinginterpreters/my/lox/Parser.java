@@ -24,6 +24,15 @@ class Parser {
         return statements;
     }
 
+    // REPL 전용: 한 줄을 식 하나로 파싱한다. 실패하면 null.
+    Expr parseExpression() {
+        try {
+            return expression();
+        } catch (ParseError e) {
+            return null;
+        }
+    }
+
     private Expr expression() {
         return comma();
     }

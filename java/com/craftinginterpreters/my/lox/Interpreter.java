@@ -16,6 +16,16 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
         }
     }
 
+    // REPL 전용: 식 하나를 평가해서 그 결과를 출력한다.
+    void interpret(Expr expression) {
+        try {
+            Object value = evaluate(expression);
+            System.out.println(stringify(value));
+        } catch (RuntimeError e) {
+            Lox.runtimeError(e);
+        }
+    }
+
     private String stringify(Object object) {
         if (object == null) return "nil";
 
