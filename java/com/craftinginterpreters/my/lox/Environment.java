@@ -4,6 +4,10 @@ import java.util.HashMap;
 import java.util.Map;
 
 class Environment {
+    // 선언만 되고 값이 한 번도 들어가지 않은 변수를 표시하는 표식.
+    // 진짜 nil(null)과 구분하기 위해 별도의 유일한 객체를 쓴다.
+    static final Object UNINITIALIZED = new Object();
+
     final Environment enclosing;
     private final Map<String, Object> values = new HashMap<>();
 
@@ -21,7 +25,12 @@ class Environment {
 
     Object get(Token name) {
         if (values.containsKey(name.lexeme)) {
-            return values.get(name.lexeme);
+            Object value = values.get(name.lexeme);
+            if (value == UNINITIALIZED) {
+                throw new RuntimeError(name,
+                        "Uninitialized variable '" + name.lexeme + "'.");
+            }
+            return value;
         }
 
         if (enclosing != null) {
