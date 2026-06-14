@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ch.9 Control Flow — 발표자료</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2330; --border:#30363d;
+    --txt:#e6edf3; --muted:#8b949e; --accent:#58a6ff; --accent2:#bc8cff;
+    --green:#3fb950; --orange:#d29922; --pink:#f778ba; --red:#f85149;
+    --mono:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--txt);overflow:hidden;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Apple SD Gothic Neo",sans-serif}
+  .deck{height:100vh;width:100vw;position:relative}
+  .slide{position:absolute;inset:0;display:none;flex-direction:column;padding:6vh 8vw;opacity:0;transition:opacity .35s ease}
+  .slide.active{display:flex;opacity:1}
+  .slide.cover{justify-content:center;align-items:center;text-align:center;
+    background:radial-gradient(1000px 500px at 50% 0%,rgba(188,140,255,.18),transparent 70%)}
+  .kicker{color:var(--accent2);font-weight:700;letter-spacing:.1em;text-transform:uppercase;font-size:1rem;margin-bottom:14px}
+  .slide h1{font-size:3.4rem;line-height:1.15;margin-bottom:18px}
+  .slide h2{font-size:2.1rem;margin-bottom:6px;display:flex;align-items:center;gap:16px}
+  .slide h2 .num{background:linear-gradient(135deg,var(--accent2),var(--pink));color:#0d1117;
+    font-weight:800;border-radius:12px;width:48px;height:48px;display:grid;place-items:center;font-size:1.4rem;flex:none}
+  .subtitle{color:var(--muted);font-size:1.25rem}
+  .slide .body{margin-top:30px;flex:1;display:flex;flex-direction:column;justify-content:center;min-height:0}
+  .lead{color:var(--muted);font-size:1.3rem;line-height:1.65;max-width:60ch}
+  ul{list-style:none}
+  ul li{font-size:1.4rem;line-height:1.9;padding-left:34px;position:relative}
+  ul li::before{content:"▸";color:var(--accent2);position:absolute;left:0}
+  b{color:var(--accent)} .g{color:var(--green)} .o{color:var(--orange)} .pk{color:var(--pink)} .pu{color:var(--accent2)}
+  code{font-family:var(--mono);background:var(--panel2);padding:.1em .4em;border-radius:5px;font-size:.92em}
+  pre{font-family:var(--mono);background:#0a0e14;border:1px solid var(--border);border-radius:12px;
+    padding:22px 26px;font-size:1.25rem;line-height:1.6;overflow:auto}
+  .kw{color:var(--pink)} .str{color:var(--green)} .com{color:var(--muted)}
+  .ty{color:var(--accent2)} .fn{color:var(--accent)} .lit{color:var(--orange)}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:26px;align-items:start}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:24px}
+  .card h3{font-size:1.4rem;margin-bottom:12px}
+  .card p{color:var(--muted);font-size:1.15rem;line-height:1.6}
+  .vs{display:grid;grid-template-columns:1fr 60px 1fr;align-items:center;gap:10px}
+  .vs .mid{text-align:center;color:var(--muted);font-size:1.6rem}
+  .grammar{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px 22px}
+  .grule{display:grid;grid-template-columns:200px 24px 1fr;gap:12px;font-family:var(--mono);font-size:1.18rem;padding:7px 0}
+  .grule .lhs{color:var(--accent2);font-weight:700;text-align:right}
+  .grule .arrow{color:var(--muted)}
+  .grule .new{color:var(--green)}
+  .tag{font-size:.75rem;background:var(--green);color:#0d1117;border-radius:5px;padding:2px 8px;font-weight:800;margin-left:10px;vertical-align:middle}
+  .callout{border-left:4px solid var(--accent);background:rgba(88,166,255,.08);padding:18px 24px;border-radius:0 12px 12px 0;font-size:1.3rem;line-height:1.6}
+  .callout.warn{border-color:var(--orange);background:rgba(210,153,34,.08)}
+  .callout.danger{border-color:var(--red);background:rgba(248,81,73,.08)}
+  .callout.good{border-color:var(--green);background:rgba(63,185,80,.08)}
+  /* dangling else */
+  .branch{display:flex;gap:30px;justify-content:center;flex-wrap:wrap}
+  .ifbox{border:1px solid var(--border);border-radius:14px;padding:20px 26px;background:var(--panel2);font-family:var(--mono);font-size:1.2rem;line-height:1.7}
+  .ifbox .lbl{font-family:inherit;color:var(--muted);font-size:1rem;margin-bottom:10px}
+  .ifbox .cond{color:var(--accent)} .ifbox .eb{color:var(--green);font-weight:700}
+  /* desugar */
+  .desugar{display:grid;grid-template-columns:1fr 60px 1fr;align-items:center;gap:14px}
+  .desugar .mid{text-align:center;font-size:2.4rem;color:var(--green)}
+  .clausebtn{cursor:pointer;border-radius:6px;padding:1px 4px;transition:.15s}
+  .hl-init{background:rgba(63,185,80,.28);outline:2px solid var(--green)}
+  .hl-cond{background:rgba(88,166,255,.28);outline:2px solid var(--accent)}
+  .hl-incr{background:rgba(247,120,186,.28);outline:2px solid var(--pink)}
+  .hl-body{background:rgba(210,153,34,.28);outline:2px solid var(--orange)}
+  .legend{display:flex;gap:18px;justify-content:center;margin-top:20px;font-size:1.05rem;flex-wrap:wrap}
+  .legend span{padding:4px 12px;border-radius:8px;cursor:pointer}
+  /* short-circuit demo */
+  .demobtns{display:flex;gap:12px;justify-content:center;margin-top:8px;flex-wrap:wrap}
+  .demobtns button{font-family:var(--mono);font-size:1.05rem;background:var(--panel2);color:var(--txt);
+    border:1px solid var(--border);border-radius:10px;padding:10px 18px;cursor:pointer;transition:.15s}
+  .demobtns button:hover{border-color:var(--accent2);color:var(--accent2)}
+  #sclog{font-family:var(--mono);font-size:1.2rem;margin-top:20px;padding:18px 22px;background:#0a0e14;
+    border:1px solid var(--border);border-radius:12px;min-height:160px;white-space:pre-wrap;line-height:1.6}
+  /* nodes */
+  .nodes{display:grid;grid-template-columns:repeat(2,1fr);gap:18px}
+  .node{border:1px solid var(--border);border-radius:14px;padding:18px;background:var(--panel2)}
+  .node.stmt{border-left:4px solid var(--orange)} .node.expr{border-left:4px solid var(--accent)}
+  .node.none{border-left:4px dashed var(--muted);opacity:.7}
+  .node h4{font-family:var(--mono);font-size:1.2rem;margin-bottom:8px}
+  .node.stmt h4{color:var(--orange)} .node.expr h4{color:var(--accent)} .node.none h4{color:var(--muted)}
+  .node p{color:var(--muted);font-size:1.05rem}
+  .node .f{display:block;font-family:var(--mono);font-size:.88rem;color:var(--green);margin-top:10px}
+  .flow{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+  .step{background:var(--panel2);border:1px solid var(--border);border-radius:12px;padding:20px;position:relative;text-align:center}
+  .step .n{position:absolute;top:-14px;left:50%;transform:translateX(-50%);width:32px;height:32px;
+    background:var(--accent2);color:#0d1117;border-radius:50%;display:grid;place-items:center;font-weight:800}
+  .step h4{margin:8px 0 6px;font-size:1.15rem} .step p{color:var(--muted);font-size:1rem}
+  .progress{position:fixed;top:0;left:0;height:4px;background:linear-gradient(90deg,var(--accent2),var(--pink));transition:width .3s;z-index:50}
+  .pagenum{position:fixed;bottom:18px;right:26px;color:var(--muted);font-family:var(--mono);font-size:.95rem;z-index:50}
+  .hint{position:fixed;bottom:18px;left:26px;color:var(--muted);font-size:.85rem;z-index:50}
+  .toc{display:grid;grid-template-columns:1fr 1fr;gap:14px 40px;font-size:1.4rem}
+  .toc div{padding:10px 0;border-bottom:1px solid var(--border);color:var(--muted)}
+  .toc div b{color:var(--txt)}
+</style>
+</head>
+<body>
+<div class="progress" id="prog"></div>
+<div class="deck" id="deck">
+
+  <!-- 1 cover -->
+  <section class="slide cover active">
+    <div class="kicker">Crafting Interpreters · Part II (jlox)</div>
+    <h1>Chapter 9<br>Control Flow</h1>
+    <p class="subtitle">분기와 반복으로 인터프리터에<br><b style="color:var(--accent2)">튜링 완전성</b>을 부여하다</p>
+    <p style="margin-top:40px;color:var(--muted);font-family:var(--mono)">← → 키로 이동 · 발표자료</p>
+  </section>
+
+  <!-- 2 목차 -->
+  <section class="slide">
+    <h2><span class="num">≡</span>오늘 다룰 내용</h2>
+    <div class="body">
+      <div class="toc">
+        <div><b>1.</b> 왜 9장인가 — 튜링 완전성</div>
+        <div><b>2.</b> 분기 vs 반복</div>
+        <div><b>3.</b> if / else 문</div>
+        <div><b>4.</b> 단글링 else 문제</div>
+        <div><b>5.</b> 논리 연산자 and / or</div>
+        <div><b>6.</b> 단락 평가 (데모)</div>
+        <div><b>7.</b> while 루프</div>
+        <div><b>8.</b> for = 문법 설탕 (디슈가링)</div>
+        <div><b>9.</b> 디슈가링 변환 (데모)</div>
+        <div><b>10.</b> AST 노드 정리</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 why -->
+  <section class="slide">
+    <h2><span class="num">1</span>왜 9장인가?</h2>
+    <p class="subtitle">8장 언어는 위→아래로 <b>한 번</b> 흐를 뿐. 건너뛰거나 반복할 수 없다.</p>
+    <div class="body">
+      <pre><span class="kw">var</span> a = <span class="lit">1</span>;
+<span class="kw">print</span> a;       <span class="com">// 항상 순서대로 한 번씩만 실행</span>
+<span class="kw">print</span> a + <span class="lit">1</span>;   <span class="com">// 조건 분기도, 반복도 불가능</span></pre>
+      <div class="callout" style="margin-top:30px"><b>튜링 완전의 조건</b> = 산술 + <b style="color:var(--accent2)">제어 흐름</b> + (이론상) 무한한 메모리. 9장이 "제어 흐름"을 채우면 Lox는 계산 가능한 모든 함수를 표현할 수 있게 된다.</div>
+    </div>
+  </section>
+
+  <!-- 4 branch vs loop -->
+  <section class="slide">
+    <h2><span class="num">2</span>제어 흐름의 두 갈래</h2>
+    <div class="body">
+      <div class="vs">
+        <div class="card">
+          <h3 class="b">분기 (Branching)</h3>
+          <p style="font-size:1.3rem">조건에 따라 코드를<br><b>실행하거나 건너뛴다</b></p>
+          <pre style="font-size:1.15rem;margin-top:14px"><span class="kw">if</span> · <span class="kw">and</span> · <span class="kw">or</span></pre>
+        </div>
+        <div class="mid">+</div>
+        <div class="card">
+          <h3 class="pk">반복 (Looping)</h3>
+          <p style="font-size:1.3rem">코드를<br><b style="color:var(--pink)">여러 번 실행</b>한다</p>
+          <pre style="font-size:1.15rem;margin-top:14px"><span class="kw">while</span> · <span class="kw">for</span></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5 if -->
+  <section class="slide">
+    <h2><span class="num">3</span>조건 실행 — if / else</h2>
+    <p class="subtitle">조건이 참이면 then, 거짓이면 else. else는 선택사항.</p>
+    <div class="body">
+      <pre><span class="kw">if</span> (condition) {
+  <span class="kw">print</span> <span class="str">"참일 때"</span>;
+} <span class="kw">else</span> {
+  <span class="kw">print</span> <span class="str">"거짓일 때"</span>;
+}</pre>
+      <div class="grammar" style="margin-top:26px">
+        <div class="grule"><span class="lhs">statement</span><span class="arrow">→</span><span>exprStmt | <span class="new">ifStmt</span> | printStmt | block <span class="tag">NEW</span></span></div>
+        <div class="grule"><span class="lhs">ifStmt</span><span class="arrow">→</span><span><span class="new">"if" "(" expression ")" statement</span></span></div>
+        <div class="grule"><span class="lhs"></span><span class="arrow"></span><span><span class="new">( "else" statement )?</span> <span class="tag">NEW</span></span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6 dangling else -->
+  <section class="slide">
+    <h2><span class="num">4</span>⚠️ 단글링 else 문제</h2>
+    <p class="subtitle"><code>if (first) if (second) A(); else B();</code> — else는 어느 if에 붙나?</p>
+    <div class="body">
+      <div class="branch">
+        <div class="ifbox">
+          <div class="lbl">해석 A — 안쪽 if ✅</div>
+          if (first)<br>&nbsp;&nbsp;<span class="cond">if (second)</span> A();<br>&nbsp;&nbsp;<span class="eb">else</span> B();
+        </div>
+        <div class="ifbox" style="opacity:.45">
+          <div class="lbl">해석 B — 바깥 if ❌</div>
+          <span class="cond">if (first)</span><br>&nbsp;&nbsp;if (second) A();<br><span style="text-decoration:line-through">else B();</span>
+        </div>
+      </div>
+      <div class="callout good" style="margin-top:34px"><b style="color:var(--green)">규칙</b> &nbsp;else는 <b style="color:var(--green)">가장 가까운 앞쪽 if</b>에 묶인다. 파서가 else를 보자마자 <b>즉시(eagerly)</b> 현재 if에 매칭하면 자동 해결.</div>
+    </div>
+  </section>
+
+  <!-- 7 logical operators -->
+  <section class="slide">
+    <h2><span class="num">5</span>논리 연산자 — and / or</h2>
+    <p class="subtitle">일반 이항 연산자와 <b>다르다</b>: 단락 평가 + 불린이 아닌 <b>피연산자 값</b> 반환</p>
+    <div class="body">
+      <div class="grammar">
+        <div class="grule"><span class="lhs">assignment</span><span class="arrow">→</span><span>... | <span class="new">logic_or</span></span></div>
+        <div class="grule"><span class="lhs">logic_or</span><span class="arrow">→</span><span><span class="new">logic_and ( "or" logic_and )*</span> <span class="tag">NEW</span></span></div>
+        <div class="grule"><span class="lhs">logic_and</span><span class="arrow">→</span><span><span class="new">equality ( "and" equality )*</span> <span class="tag">NEW</span></span></div>
+      </div>
+      <div class="two" style="margin-top:24px">
+        <div class="card"><h3 class="o">값을 돌려준다</h3>
+          <pre style="font-size:1.05rem"><span class="kw">print</span> <span class="str">"hi"</span> <span class="kw">or</span> <span class="lit">2</span>;   <span class="com">// "hi"</span>
+<span class="kw">print</span> nil <span class="kw">or</span> <span class="str">"y"</span>;  <span class="com">// "y"</span></pre>
+          <p>true가 아니라 <b style="color:var(--orange)">피연산자</b>를 반환.</p></div>
+        <div class="card"><h3 class="g">우선순위</h3>
+          <p style="font-size:1.15rem"><code>or</code> 가 <code>and</code> 보다 <b>낮다</b>.<br>assignment → or → and → equality → ...</p></div>
+      </div>
+      <div class="callout warn" style="margin-top:22px"><b style="color:var(--orange)">왜 Expr.Binary 재사용 안 함?</b> 일반 연산자는 양쪽을 먼저 평가 → 논리 연산자는 왼쪽 먼저 보고 필요할 때만 오른쪽 평가. 평가 방식이 달라 <code>Expr.Logical</code> 별도 필요.</div>
+    </div>
+  </section>
+
+  <!-- 8 short-circuit demo -->
+  <section class="slide">
+    <h2><span class="num">6</span>단락 평가 <small style="color:var(--muted);font-size:1rem">(클릭 데모)</small></h2>
+    <p class="subtitle">왼쪽만으로 결과가 정해지면 오른쪽 <code>sideEffect()</code>는 평가조차 안 함</p>
+    <div class="body">
+      <div class="demobtns">
+        <button onclick="sc('or',true)">true or sideEffect()</button>
+        <button onclick="sc('or',false)">false or sideEffect()</button>
+        <button onclick="sc('and',true)">true and sideEffect()</button>
+        <button onclick="sc('and',false)">false and sideEffect()</button>
+      </div>
+      <div id="sclog">▶ 버튼을 눌러 평가 과정을 확인하세요.</div>
+    </div>
+  </section>
+
+  <!-- 9 while -->
+  <section class="slide">
+    <h2><span class="num">7</span>while 루프</h2>
+    <p class="subtitle">조건이 참인 동안 본문을 반복 — 가장 단순한 반복</p>
+    <div class="body">
+      <pre><span class="kw">var</span> i = <span class="lit">0</span>;
+<span class="kw">while</span> (i &lt; <span class="lit">3</span>) {
+  <span class="kw">print</span> i;
+  i = i + <span class="lit">1</span>;
+}</pre>
+      <div class="grammar" style="margin-top:26px">
+        <div class="grule"><span class="lhs">statement</span><span class="arrow">→</span><span>... | <span class="new">whileStmt</span> | ... <span class="tag">NEW</span></span></div>
+        <div class="grule"><span class="lhs">whileStmt</span><span class="arrow">→</span><span><span class="new">"while" "(" expression ")" statement</span> <span class="tag">NEW</span></span></div>
+      </div>
+      <div class="callout" style="margin-top:24px"><code>visitWhileStmt</code>는 Java의 while로 감싼다 → 소스 길이와 무관하게 실행 시간이 늘어날 수 있게 됨.</div>
+    </div>
+  </section>
+
+  <!-- 10 for desugar concept -->
+  <section class="slide">
+    <h2><span class="num">8</span>for = 문법 설탕 (디슈가링)</h2>
+    <p class="subtitle">for는 <b>새 AST 노드를 안 만든다.</b> 기존 while + block으로 <b>변환</b>될 뿐.</p>
+    <div class="body">
+      <div class="grammar">
+        <div class="grule"><span class="lhs">forStmt</span><span class="arrow">→</span><span><span class="new">"for" "(" ( varDecl | exprStmt | ";" )</span></span></div>
+        <div class="grule"><span class="lhs"></span><span class="arrow"></span><span><span class="new">expression? ";" expression? ")" statement</span> <span class="tag">NEW</span></span></div>
+      </div>
+      <p style="margin-top:20px;font-size:1.3rem;text-align:center">세 절: &nbsp;<span class="hl-init" style="padding:2px 8px;border-radius:6px">초기화</span> &nbsp;;&nbsp; <span class="hl-cond" style="padding:2px 8px;border-radius:6px">조건</span> &nbsp;;&nbsp; <span class="hl-incr" style="padding:2px 8px;border-radius:6px">증감</span> &nbsp;— 모두 생략 가능</p>
+      <div class="callout good" style="margin-top:30px"><b style="color:var(--green)">디슈가링의 이점</b> &nbsp;프론트엔드(파서)에서 변환만 하면 백엔드(인터프리터)는 손댈 필요 없음. 편의 문법을 공짜로.</div>
+    </div>
+  </section>
+
+  <!-- 11 desugar demo -->
+  <section class="slide">
+    <h2><span class="num">9</span>디슈가링 변환 <small style="color:var(--muted);font-size:1rem">(절을 클릭/호버)</small></h2>
+    <div class="body">
+      <div class="desugar">
+        <div>
+          <div style="font-size:1rem;color:var(--muted);margin-bottom:8px">원본 for문</div>
+          <pre style="font-size:1.15rem"><span class="kw">for</span> (<span class="clausebtn" data-c="init">var i = 0</span>; <span class="clausebtn" data-c="cond">i &lt; 10</span>; <span class="clausebtn" data-c="incr">i = i+1</span>)
+  <span class="clausebtn" data-c="body">print i;</span></pre>
+        </div>
+        <div class="mid">➜</div>
+        <div>
+          <div style="font-size:1rem;color:var(--muted);margin-bottom:8px">디슈가링 결과</div>
+          <pre style="font-size:1.1rem">{
+  <span class="clausebtn" data-c="init">var i = 0;</span>
+  <span class="kw">while</span> (<span class="clausebtn" data-c="cond">i &lt; 10</span>) {
+    <span class="clausebtn" data-c="body">print i;</span>
+    <span class="clausebtn" data-c="incr">i = i+1;</span>
+  }
+}</pre>
+        </div>
+      </div>
+      <div class="legend">
+        <span class="hl-init" data-c="init">초기화 → 바깥 블록 맨 앞</span>
+        <span class="hl-cond" data-c="cond">조건 → while 조건</span>
+        <span class="hl-incr" data-c="incr">증감 → 본문 끝</span>
+        <span class="hl-body" data-c="body">본문 → while 본문 앞</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 12 AST nodes -->
+  <section class="slide">
+    <h2><span class="num">10</span>추가된 AST 노드</h2>
+    <p class="subtitle">단 3개. for는 디슈가링되므로 <b>전용 노드 없음</b>.</p>
+    <div class="body">
+      <div class="nodes">
+        <div class="node stmt"><h4>Stmt.If</h4><p>조건 분기. elseBranch nullable.</p><span class="f">Expr condition, Stmt thenBranch, Stmt elseBranch</span></div>
+        <div class="node stmt"><h4>Stmt.While</h4><p>조건 참인 동안 body 반복.</p><span class="f">Expr condition, Stmt body</span></div>
+        <div class="node expr"><h4>Expr.Logical</h4><p>and/or. 단락 평가 위해 Binary와 분리.</p><span class="f">Expr left, Token operator, Expr right</span></div>
+        <div class="node none"><h4>Stmt.For ❌</h4><p>없음! 디슈가링으로 while+block에 흡수.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 13 summary -->
+  <section class="slide cover">
+    <div class="kicker">정리</div>
+    <h1 style="font-size:2.6rem">핵심 4가지</h1>
+    <ul style="text-align:left;margin-top:20px;font-size:1.45rem">
+      <li>제어 흐름(분기+반복)이 추가되며 Lox가 <b>튜링 완전</b>해짐</li>
+      <li><b>단글링 else</b>는 "가장 가까운 if"에 묶어 해결</li>
+      <li><b>and/or</b>는 단락 평가 + 피연산자 값 반환 → <code>Expr.Logical</code> 별도</li>
+      <li><b>for는 문법 설탕</b> — while+block으로 디슈가링, 전용 노드 없음</li>
+    </ul>
+    <p style="margin-top:40px;color:var(--muted)">다음 장: Chapter 10 — Functions</p>
+  </section>
+
+</div>
+
+<div class="pagenum" id="pagenum"></div>
+<div class="hint">← → · Space · F(전체화면)</div>
+
+<script>
+const slides=[...document.querySelectorAll('.slide')];
+let cur=0;
+function show(i){
+  cur=Math.max(0,Math.min(slides.length-1,i));
+  slides.forEach((s,k)=>s.classList.toggle('active',k===cur));
+  document.getElementById('prog').style.width=((cur+1)/slides.length*100)+'%';
+  document.getElementById('pagenum').textContent=`${cur+1} / ${slides.length}`;
+}
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown'){show(cur+1);e.preventDefault();}
+  else if(e.key==='ArrowLeft'||e.key==='PageUp'){show(cur-1);}
+  else if(e.key==='Home'){show(0);}
+  else if(e.key==='End'){show(slides.length-1);}
+  else if(e.key.toLowerCase()==='f'){
+    if(!document.fullscreenElement)document.documentElement.requestFullscreen();
+    else document.exitFullscreen();
+  }
+});
+document.addEventListener('click',e=>{ if(e.target.tagName!=='BUTTON'&&!e.target.classList.contains('clausebtn')) show(cur+1); });
+show(0);
+
+/* short-circuit demo */
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+async function sc(op,leftVal){
+  const log=document.getElementById('sclog');
+  const name=op==='or'?'or':'and';
+  log.textContent=`▶ ${leftVal} ${name} sideEffect()  평가 시작\n`;
+  await sleep(450);
+  log.textContent+=`\n1️⃣ 왼쪽 피연산자 평가 → ${leftVal}`;
+  await sleep(700);
+  const shortCircuit=(op==='or')?leftVal===true:leftVal===false;
+  if(shortCircuit){
+    log.textContent+=`\n2️⃣ ${op==='or'?'왼쪽이 truthy → or는 더 볼 것 없음':'왼쪽이 falsey → and는 더 볼 것 없음'}`;
+    await sleep(700);
+    log.textContent+=`\n⏭️  오른쪽 sideEffect() 평가 건너뜀 (단락!)`;
+    await sleep(600);
+    log.textContent+=`\n✅ 결과 = ${leftVal}   (왼쪽 값을 그대로 반환)`;
+  }else{
+    log.textContent+=`\n2️⃣ ${op==='or'?'왼쪽이 falsey → 오른쪽도 봐야 함':'왼쪽이 truthy → 오른쪽도 봐야 함'}`;
+    await sleep(700);
+    log.textContent+=`\n3️⃣ 오른쪽 sideEffect() 평가...`;
+    await sleep(600);
+    log.textContent+=`\n   💥 sideEffect() 호출됨! → "effect" 반환`;
+    await sleep(700);
+    log.textContent+=`\n✅ 결과 = "effect"   (오른쪽 값을 반환)`;
+  }
+}
+
+/* desugar highlight */
+const colorMap={init:'hl-init',cond:'hl-cond',incr:'hl-incr',body:'hl-body'};
+let activeClause=null;
+function paint(c){document.querySelectorAll(`.clausebtn[data-c="${c}"]`).forEach(e=>e.classList.add(colorMap[c]));}
+function clearAll(){document.querySelectorAll('.clausebtn').forEach(e=>e.classList.remove('hl-init','hl-cond','hl-incr','hl-body'));}
+function refresh(){clearAll();if(activeClause)paint(activeClause);}
+document.querySelectorAll('.clausebtn').forEach(el=>{
+  el.addEventListener('mouseenter',()=>{clearAll();paint(el.dataset.c);});
+  el.addEventListener('mouseleave',refresh);
+  el.addEventListener('click',e=>{e.stopPropagation();activeClause=activeClause===el.dataset.c?null:el.dataset.c;refresh();});
+});
+document.querySelectorAll('.legend span').forEach(el=>{
+  el.addEventListener('mouseenter',()=>{clearAll();paint(el.dataset.c);});
+  el.addEventListener('mouseleave',refresh);
+  el.addEventListener('click',e=>{e.stopPropagation();activeClause=activeClause===el.dataset.c?null:el.dataset.c;refresh();});
+});
+</script>
+</body>
+</html>

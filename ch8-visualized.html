@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crafting Interpreters — Ch.8 Statements and State 시각화</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2330; --border:#30363d;
+    --txt:#e6edf3; --muted:#8b949e; --accent:#58a6ff; --accent2:#bc8cff;
+    --green:#3fb950; --orange:#d29922; --pink:#f778ba; --red:#f85149;
+    --mono:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--bg); color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Apple SD Gothic Neo",sans-serif;
+    line-height:1.7;
+  }
+  header{
+    text-align:center; padding:48px 20px 32px;
+    background:radial-gradient(900px 400px at 50% -10%,rgba(88,166,255,.18),transparent 70%);
+    border-bottom:1px solid var(--border);
+  }
+  header .eyebrow{color:var(--accent);font-weight:600;letter-spacing:.08em;font-size:.85rem;text-transform:uppercase}
+  header h1{margin:.3em 0 .1em;font-size:2.2rem}
+  header p{color:var(--muted);margin:.2em 0;font-size:1rem}
+  .wrap{max-width:1000px;margin:0 auto;padding:0 20px}
+
+  nav{
+    position:sticky;top:0;z-index:10;background:rgba(13,17,23,.85);
+    backdrop-filter:blur(8px);border-bottom:1px solid var(--border);
+    display:flex;gap:6px;flex-wrap:wrap;justify-content:center;padding:10px;
+  }
+  nav a{
+    color:var(--muted);text-decoration:none;font-size:.82rem;padding:5px 11px;
+    border-radius:20px;border:1px solid transparent;transition:.15s;
+  }
+  nav a:hover{color:var(--txt);border-color:var(--border);background:var(--panel)}
+
+  section{padding:46px 0;border-bottom:1px solid var(--border)}
+  h2{font-size:1.55rem;display:flex;align-items:center;gap:12px;margin:0 0 6px}
+  h2 .num{
+    background:linear-gradient(135deg,var(--accent),var(--accent2));
+    color:#0d1117;font-weight:800;border-radius:9px;width:34px;height:34px;
+    display:grid;place-items:center;font-size:1rem;flex:none;
+  }
+  .lead{color:var(--muted);margin:0 0 22px}
+  h3{font-size:1.05rem;margin:26px 0 10px;color:var(--accent)}
+
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:20px;margin:14px 0}
+  code{font-family:var(--mono);background:var(--panel2);padding:.12em .4em;border-radius:5px;font-size:.9em}
+  pre{
+    font-family:var(--mono);background:#0a0e14;border:1px solid var(--border);
+    border-radius:10px;padding:16px;overflow-x:auto;font-size:.86rem;line-height:1.55;margin:10px 0;
+  }
+  .kw{color:var(--pink)} .str{color:var(--green)} .com{color:var(--muted)}
+  .ty{color:var(--accent2)} .fn{color:var(--accent)} .lit{color:var(--orange)}
+
+  /* grammar pipeline */
+  .grammar{display:flex;flex-direction:column;gap:0}
+  .grule{
+    display:grid;grid-template-columns:130px 18px 1fr;align-items:start;gap:10px;
+    padding:9px 12px;border-radius:8px;font-family:var(--mono);font-size:.85rem;
+  }
+  .grule:nth-child(odd){background:var(--panel2)}
+  .grule .lhs{color:var(--accent);font-weight:700;text-align:right}
+  .grule .arrow{color:var(--muted)}
+  .grule .rhs{color:var(--txt)}
+  .grule .new{color:var(--green)}
+  .tag-new{font-size:.65rem;background:var(--green);color:#0d1117;border-radius:4px;padding:1px 6px;font-weight:700;margin-left:8px;vertical-align:middle}
+
+  /* node grid */
+  .nodes{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+  .node{border:1px solid var(--border);border-radius:11px;padding:14px;background:var(--panel2)}
+  .node.stmt{border-left:3px solid var(--orange)}
+  .node.expr{border-left:3px solid var(--accent)}
+  .node h4{margin:0 0 6px;font-family:var(--mono);font-size:.92rem}
+  .node.stmt h4{color:var(--orange)} .node.expr h4{color:var(--accent)}
+  .node p{margin:0;font-size:.83rem;color:var(--muted)}
+  .node .fields{font-family:var(--mono);font-size:.74rem;color:var(--green);margin-top:8px;display:block}
+
+  /* environment diagram */
+  .envscene{display:flex;flex-wrap:wrap;gap:26px;align-items:flex-start;justify-content:center;margin:18px 0}
+  .env{
+    border:2px solid var(--border);border-radius:13px;min-width:230px;background:var(--panel2);
+    position:relative;
+  }
+  .env .envhead{
+    padding:8px 14px;font-weight:700;font-family:var(--mono);font-size:.85rem;
+    border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;
+  }
+  .env.global .envhead{color:var(--green)}
+  .env.block .envhead{color:var(--accent2)}
+  .env .map{padding:10px 14px}
+  .binding{
+    display:flex;justify-content:space-between;font-family:var(--mono);font-size:.84rem;
+    padding:5px 9px;margin:4px 0;background:#0a0e14;border-radius:6px;border:1px solid var(--border);
+  }
+  .binding .vname{color:var(--pink)} .binding .vval{color:var(--orange)}
+  .env .encl{padding:6px 14px 11px;font-size:.72rem;color:var(--muted);font-family:var(--mono)}
+  .arrowup{text-align:center;color:var(--accent);font-size:1.6rem;align-self:center}
+  .arrowup small{display:block;font-size:.66rem;color:var(--muted);font-family:var(--mono)}
+
+  .callout{border-left:3px solid var(--accent);background:rgba(88,166,255,.08);padding:12px 16px;border-radius:0 8px 8px 0;margin:14px 0}
+  .callout.warn{border-color:var(--orange);background:rgba(210,153,34,.08)}
+  .callout.danger{border-color:var(--red);background:rgba(248,81,73,.08)}
+  .callout b{color:var(--accent)} .callout.warn b{color:var(--orange)} .callout.danger b{color:var(--red)}
+
+  /* interactive lookup demo */
+  .demo{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:20px;margin:16px 0}
+  .demo .controls{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+  .demo button{
+    font-family:var(--mono);font-size:.84rem;background:var(--panel2);color:var(--txt);
+    border:1px solid var(--border);border-radius:8px;padding:8px 14px;cursor:pointer;transition:.15s;
+  }
+  .demo button:hover{border-color:var(--accent);color:var(--accent)}
+  .demo button.active{background:var(--accent);color:#0d1117;border-color:var(--accent);font-weight:700}
+  .lookup-env{transition:.3s;opacity:.55}
+  .lookup-env.searching{opacity:1;border-color:var(--orange);box-shadow:0 0 0 3px rgba(210,153,34,.25)}
+  .lookup-env.found{opacity:1;border-color:var(--green);box-shadow:0 0 0 3px rgba(63,185,80,.3)}
+  .binding.hit{background:rgba(63,185,80,.2);border-color:var(--green)}
+  #lookup-log{font-family:var(--mono);font-size:.82rem;margin-top:14px;padding:12px;background:#0a0e14;border-radius:8px;border:1px solid var(--border);min-height:60px;white-space:pre-wrap}
+
+  /* flow steps */
+  .flow{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:14px 0}
+  .step{background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:13px;position:relative}
+  .step .n{position:absolute;top:-10px;left:-10px;width:26px;height:26px;background:var(--accent);color:#0d1117;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:.8rem}
+  .step h4{margin:2px 0 5px;font-size:.9rem}
+  .step p{margin:0;font-size:.78rem;color:var(--muted)}
+
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:680px){.two{grid-template-columns:1fr}.grule{grid-template-columns:90px 14px 1fr}}
+  footer{text-align:center;padding:30px;color:var(--muted);font-size:.85rem}
+  footer a{color:var(--accent)}
+  .pill{display:inline-block;font-size:.7rem;font-family:var(--mono);padding:2px 8px;border-radius:20px;border:1px solid var(--border);color:var(--muted);margin-left:6px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="eyebrow">Crafting Interpreters · Part II (jlox)</div>
+  <h1>Chapter 8 — Statements and State</h1>
+  <p>표현식만 다루던 인터프리터에 <b>문장(statement)</b>과 <b>상태(state)</b>를 더하다</p>
+  <p class="pill">문장 · 전역 변수 · Environment · 할당 · 스코프</p>
+</header>
+
+<nav>
+  <a href="#s1">① 문장</a>
+  <a href="#s2">② 전역 변수</a>
+  <a href="#s3">③ Environment</a>
+  <a href="#s4">④ 할당</a>
+  <a href="#s5">⑤ 스코프 & 블록</a>
+  <a href="#demo">🔍 변수 탐색 데모</a>
+  <a href="#nodes">🌳 AST 노드</a>
+</nav>
+
+<div class="wrap">
+
+<!-- intro -->
+<section>
+  <p class="lead">
+    7장까지의 인터프리터는 <code>1 + 2 * 3</code> 같은 <b>표현식 하나</b>를 계산해 값을 돌려줄 뿐이었습니다.
+    실제 프로그램이 되려면 <b>여러 문장을 차례로 실행</b>하고, <b>값을 기억(변수)</b>할 수 있어야 합니다.
+    8장은 이 두 가지 — <i>statements</i>(부수 효과를 내는 실행 단위)와 <i>state</i>(변수에 저장되는 상태) — 를 추가합니다.
+  </p>
+  <div class="callout">
+    <b>핵심 한 줄</b> &nbsp;표현식은 <b>값을 만들고</b>, 문장은 <b>효과를 낸다</b>. 그리고 변수는 그 효과를 <b>Environment</b>라는 맵에 기억한다.
+  </div>
+</section>
+
+<!-- 1 statements -->
+<section id="s1">
+  <h2><span class="num">1</span>문장 (Statements)</h2>
+  <p class="lead">프로그램은 이제 "표현식 하나"가 아니라 "문장의 나열"입니다. 두 종류의 문장으로 출발합니다.</p>
+
+  <div class="two">
+    <div class="card">
+      <h3 style="margin-top:0">표현식 문장 <span style="color:var(--muted);font-size:.8rem">exprStmt</span></h3>
+      <p style="margin:0;color:var(--muted);font-size:.9rem">표현식 뒤에 <code>;</code>. 값보다 <b>부수 효과</b>(예: 함수 호출)를 위해 존재.</p>
+      <pre><span class="fn">brunch</span>(<span class="str">"eggs"</span>);</pre>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">print 문 <span style="color:var(--muted);font-size:.8rem">printStmt</span></h3>
+      <p style="margin:0;color:var(--muted);font-size:.9rem">Lox에 내장된 문법. 평가 결과를 stdout에 출력.</p>
+      <pre><span class="kw">print</span> <span class="lit">2</span> + <span class="lit">1</span>; <span class="com">// 3</span></pre>
+    </div>
+  </div>
+
+  <h3>새 문법 규칙</h3>
+  <div class="card">
+    <div class="grammar">
+      <div class="grule"><span class="lhs">program</span><span class="arrow">→</span><span class="rhs"><span class="new">statement* EOF</span> <span class="tag-new">NEW</span></span></div>
+      <div class="grule"><span class="lhs">statement</span><span class="arrow">→</span><span class="rhs">exprStmt | printStmt <span class="tag-new">NEW</span></span></div>
+      <div class="grule"><span class="lhs">exprStmt</span><span class="arrow">→</span><span class="rhs">expression <span class="new">";"</span></span></div>
+      <div class="grule"><span class="lhs">printStmt</span><span class="arrow">→</span><span class="rhs"><span class="new">"print"</span> expression <span class="new">";"</span></span></div>
+    </div>
+  </div>
+  <div class="callout">
+    인터프리터는 이제 두 개의 Visitor를 구현합니다: <code>Expr.Visitor&lt;Object&gt;</code>(값 반환) 와
+    <code>Stmt.Visitor&lt;Void&gt;</code>(효과만). 표현식은 <code>evaluate()</code>, 문장은 <code>execute()</code>로 처리.
+  </div>
+</section>
+
+<!-- 2 global variables -->
+<section id="s2">
+  <h2><span class="num">2</span>전역 변수 (Global Variables)</h2>
+  <p class="lead">변수에는 두 동작이 필요합니다 — <b>선언</b>(이름을 만들고 값을 묶음)과 <b>접근</b>(이름으로 값을 꺼냄).</p>
+
+  <pre><span class="kw">var</span> beverage = <span class="str">"espresso"</span>;   <span class="com">// 선언 + 초기화</span>
+<span class="kw">print</span> beverage;                <span class="com">// 접근 → espresso</span>
+<span class="kw">var</span> empty;                     <span class="com">// 초기화 없으면 nil</span></pre>
+
+  <h3>선언은 아무 데나 올 수 없다 — declaration 계층 추가</h3>
+  <div class="card">
+    <div class="grammar">
+      <div class="grule"><span class="lhs">program</span><span class="arrow">→</span><span class="rhs"><span class="new">declaration*</span> EOF</span></div>
+      <div class="grule"><span class="lhs">declaration</span><span class="arrow">→</span><span class="rhs"><span class="new">varDecl</span> | statement <span class="tag-new">NEW</span></span></div>
+      <div class="grule"><span class="lhs">varDecl</span><span class="arrow">→</span><span class="rhs"><span class="new">"var" IDENTIFIER ( "=" expression )? ";"</span> <span class="tag-new">NEW</span></span></div>
+      <div class="grule"><span class="lhs">statement</span><span class="arrow">→</span><span class="rhs">exprStmt | printStmt</span></div>
+      <div class="grule"><span class="lhs">primary</span><span class="arrow">→</span><span class="rhs">... | <span class="new">IDENTIFIER</span> <span class="tag-new">NEW</span></span></div>
+    </div>
+  </div>
+  <div class="callout warn">
+    <b>왜 declaration을 따로?</b> &nbsp;<code>if (cond) var x = 1;</code> 처럼 변수 선언이 단독으로
+    숨어드는 걸 막기 위해서입니다. <code>declaration → varDecl | statement</code> 로 한 겹을 두면,
+    "변수 선언이 허용되는 자리"와 "일반 문장만 되는 자리"가 문법적으로 구분됩니다.
+  </div>
+</section>
+
+<!-- 3 environment -->
+<section id="s3">
+  <h2><span class="num">3</span>Environment — 변수를 담는 그릇</h2>
+  <p class="lead">변수 이름 → 값의 묶음(binding)을 저장하는 자료구조. 본질은 <code>HashMap&lt;String, Object&gt;</code> 하나입니다.</p>
+
+  <pre><span class="kw">class</span> <span class="ty">Environment</span> {
+  <span class="kw">final</span> <span class="ty">Environment</span> enclosing;              <span class="com">// 바깥(부모) 스코프</span>
+  <span class="kw">private final</span> <span class="ty">Map</span>&lt;String,Object&gt; values = <span class="kw">new</span> <span class="ty">HashMap</span>&lt;&gt;();
+
+  <span class="kw">void</span> <span class="fn">define</span>(String name, Object value) { ... }  <span class="com">// 새 변수 묶기 (재정의 허용)</span>
+  Object <span class="fn">get</span>(Token name)             { ... }  <span class="com">// 값 꺼내기</span>
+  <span class="kw">void</span> <span class="fn">assign</span>(Token name, Object v)  { ... }  <span class="com">// 기존 변수 수정</span>
+}</pre>
+
+  <div class="two">
+    <div class="card">
+      <h4 style="margin-top:0;color:var(--green)">define — 선언</h4>
+      <p style="font-size:.85rem;color:var(--muted);margin:0">맵에 그냥 <code>put</code>. 이미 있으면 <b>덮어씀</b>. 그래서 전역에서 <code>var a = 1; var a = 2;</code> 가 허용됨.</p>
+    </div>
+    <div class="card">
+      <h4 style="margin-top:0;color:var(--accent)">get / assign — 접근/수정</h4>
+      <p style="font-size:.85rem;color:var(--muted);margin:0">이름이 <b>없으면</b> <code>RuntimeError</code>("Undefined variable"). 단, 컴파일 에러가 아닌 <b>런타임 에러</b>로 처리해 재귀 같은 패턴을 가능하게 함.</p>
+    </div>
+  </div>
+
+  <div class="callout">
+    변수는 <b>토큰이 아니라 lexeme(문자열)</b>로 저장됩니다. 코드 곳곳의 <code>a</code> 토큰은 서로 다른 객체지만,
+    같은 문자열 <code>"a"</code>로 묶이므로 <b>같은 바인딩</b>을 가리킵니다.
+  </div>
+</section>
+
+<!-- 4 assignment -->
+<section id="s4">
+  <h2><span class="num">4</span>할당 (Assignment)</h2>
+  <p class="lead">Lox에서 할당은 <b>문장이 아니라 표현식</b>입니다. 값을 돌려주므로 <code>a = b = 3</code> 처럼 연쇄 가능(우결합).</p>
+
+  <div class="card">
+    <div class="grammar">
+      <div class="grule"><span class="lhs">expression</span><span class="arrow">→</span><span class="rhs"><span class="new">assignment</span> <span class="tag-new">NEW</span></span></div>
+      <div class="grule"><span class="lhs">assignment</span><span class="arrow">→</span><span class="rhs"><span class="new">IDENTIFIER "=" assignment</span> | equality <span class="tag-new">NEW</span></span></div>
+    </div>
+  </div>
+
+  <h3>파서의 트릭 — l-value 문제</h3>
+  <p style="color:var(--muted);font-size:.92rem">
+    <code>=</code> 왼쪽이 단순 변수가 아니라 <code>a.b.c = 3</code> 처럼 복잡할 수 있어, 미리 "할당이다"라고 알기 어렵습니다.
+    그래서 책의 방법은:
+  </p>
+  <div class="flow">
+    <div class="step"><div class="n">1</div><h4>왼쪽을 그냥 표현식으로 파싱</h4><p>일단 <code>equality</code>까지 일반 표현식으로 읽는다</p></div>
+    <div class="step"><div class="n">2</div><h4><code>=</code> 가 보이면?</h4><p>방금 읽은 게 할당 대상이었음을 깨닫는다</p></div>
+    <div class="step"><div class="n">3</div><h4>대상이 Variable인지 검사</h4><p>맞으면 <code>Expr.Assign</code> 으로 변환, 아니면 에러</p></div>
+  </div>
+
+  <div class="callout danger">
+    <b>declare vs assign</b> &nbsp;<code>define</code>은 없으면 만든다. <code>assign</code>은 <b>없으면 에러</b>다.
+    즉 할당은 새 변수를 암묵적으로 만들지 않는다 — 오타로 인한 변수 생성을 방지.
+  </div>
+</section>
+
+<!-- 5 scope -->
+<section id="s5">
+  <h2><span class="num">5</span>스코프 & 블록 — 환경의 사슬</h2>
+  <p class="lead">
+    블록 <code>{ }</code> 마다 새 <code>Environment</code>를 만들고, 그것이 <b>바깥 환경(enclosing)</b>을 가리키게 합니다.
+    이렇게 만들어지는 사슬이 <b>렉시컬 스코프</b>를 구현합니다.
+  </p>
+
+  <pre><span class="kw">var</span> a = <span class="str">"global"</span>;
+{
+  <span class="kw">var</span> a = <span class="str">"block"</span>;   <span class="com">// 바깥 a를 가림 (shadowing)</span>
+  <span class="kw">print</span> a;            <span class="com">// block</span>
+}
+<span class="kw">print</span> a;              <span class="com">// global  (블록 끝나면 복원)</span></pre>
+
+  <h3>실행 중 환경 사슬의 모습</h3>
+  <div class="envscene">
+    <div class="env block">
+      <div class="envhead"><span>Block Env</span><span style="font-size:.7rem;color:var(--muted)">현재(innermost)</span></div>
+      <div class="map">
+        <div class="binding"><span class="vname">a</span><span class="vval">"block"</span></div>
+      </div>
+      <div class="encl">enclosing ──┐</div>
+    </div>
+    <div class="arrowup">→<small>enclosing</small></div>
+    <div class="env global">
+      <div class="envhead"><span>Global Env</span><span style="font-size:.7rem;color:var(--muted)">최상위</span></div>
+      <div class="map">
+        <div class="binding"><span class="vname">a</span><span class="vval">"global"</span></div>
+      </div>
+      <div class="encl">enclosing = null</div>
+    </div>
+  </div>
+
+  <div class="two">
+    <div class="card">
+      <h4 style="margin-top:0;color:var(--accent2)">탐색은 안쪽 → 바깥쪽</h4>
+      <p style="font-size:.85rem;color:var(--muted);margin:0">
+        <code>get</code>/<code>assign</code>은 현재 환경부터 찾고, 없으면 <code>enclosing</code>으로
+        <b>재귀적으로 거슬러 올라감</b>. 안쪽이 먼저 매칭되므로 자연스럽게 <b>shadowing</b>이 구현됨.
+      </p>
+    </div>
+    <div class="card">
+      <h4 style="margin-top:0;color:var(--green)">블록이 끝나면 복원</h4>
+      <p style="font-size:.85rem;color:var(--muted);margin:0">
+        <code>executeBlock()</code>은 새 환경으로 바꿔 실행하고, <code>finally</code>에서
+        이전 환경으로 되돌림. 에러가 나도 환경이 새지 않음.
+      </p>
+    </div>
+  </div>
+
+  <div class="callout">
+    이 구조는 한 줄로 보면 사슬이지만, 전체 실행에 걸쳐 보면 여러 갈래로 뻗는 <b>"선인장 스택(cactus stack)"</b> 트리를 이룹니다.
+  </div>
+
+  <h3>추가된 블록 문법</h3>
+  <div class="card">
+    <div class="grammar">
+      <div class="grule"><span class="lhs">statement</span><span class="arrow">→</span><span class="rhs">exprStmt | printStmt | <span class="new">block</span> <span class="tag-new">NEW</span></span></div>
+      <div class="grule"><span class="lhs">block</span><span class="arrow">→</span><span class="rhs"><span class="new">"{" declaration* "}"</span> <span class="tag-new">NEW</span></span></div>
+    </div>
+  </div>
+</section>
+
+<!-- interactive demo -->
+<section id="demo">
+  <h2>🔍 변수 탐색 인터랙티브 데모</h2>
+  <p class="lead">버튼을 눌러보세요. 환경 사슬을 어떻게 거슬러 올라가며 변수를 찾는지 단계별로 보여줍니다.</p>
+
+  <div class="demo">
+    <div class="controls">
+      <button onclick="lookup('a')">get(<span style="color:var(--pink)">a</span>) 찾기</button>
+      <button onclick="lookup('drink')">get(<span style="color:var(--pink)">drink</span>) 찾기</button>
+      <button onclick="lookup('ghost')">get(<span style="color:var(--pink)">ghost</span>) 찾기 (실패)</button>
+    </div>
+
+    <div class="envscene" style="margin:8px 0">
+      <div class="env block lookup-env" id="env-block">
+        <div class="envhead"><span>Block Env</span><span style="font-size:.7rem;color:var(--muted)">depth 0</span></div>
+        <div class="map">
+          <div class="binding" data-name="a"><span class="vname">a</span><span class="vval">"block"</span></div>
+        </div>
+        <div class="encl">enclosing ──┐</div>
+      </div>
+      <div class="arrowup">→<small>enclosing</small></div>
+      <div class="env global lookup-env" id="env-global">
+        <div class="envhead"><span>Global Env</span><span style="font-size:.7rem;color:var(--muted)">depth 1</span></div>
+        <div class="map">
+          <div class="binding" data-name="a"><span class="vname">a</span><span class="vval">"global"</span></div>
+          <div class="binding" data-name="drink"><span class="vname">drink</span><span class="vval">"espresso"</span></div>
+        </div>
+        <div class="encl">enclosing = null</div>
+      </div>
+    </div>
+
+    <div id="lookup-log">▶ 버튼을 눌러 탐색을 시작하세요.</div>
+  </div>
+</section>
+
+<!-- AST nodes -->
+<section id="nodes">
+  <h2>🌳 8장에서 추가된 AST 노드</h2>
+  <p class="lead">GenerateAst 도구로 만들어지는 새 노드들. 주황은 <b>문장(Stmt)</b>, 파랑은 <b>표현식(Expr)</b>.</p>
+
+  <div class="nodes">
+    <div class="node stmt"><h4>Stmt.Expression</h4><p>표현식 하나를 평가(부수 효과용).</p><span class="fields">Expr expression</span></div>
+    <div class="node stmt"><h4>Stmt.Print</h4><p>평가 후 stringify 해서 출력.</p><span class="fields">Expr expression</span></div>
+    <div class="node stmt"><h4>Stmt.Var</h4><p>변수 선언. 초기화 없으면 initializer = null.</p><span class="fields">Token name, Expr initializer</span></div>
+    <div class="node stmt"><h4>Stmt.Block</h4><p>중괄호 안 문장들. 실행 시 새 Environment 생성.</p><span class="fields">List&lt;Stmt&gt; statements</span></div>
+    <div class="node expr"><h4>Expr.Variable</h4><p>변수 값 읽기. 이름 토큰만 보관.</p><span class="fields">Token name</span></div>
+    <div class="node expr"><h4>Expr.Assign</h4><p>대입. 대상은 토큰(l-value), 값은 표현식.</p><span class="fields">Token name, Expr value</span></div>
+  </div>
+
+  <h3>전체 실행 흐름</h3>
+  <div class="flow">
+    <div class="step"><div class="n">1</div><h4>Parse</h4><p>문법 규칙이 Stmt/Expr 트리를 만든다</p></div>
+    <div class="step"><div class="n">2</div><h4>Interpret</h4><p>Visitor가 각 visit* 로 분기</p></div>
+    <div class="step"><div class="n">3</div><h4>Scope</h4><p>블록마다 enclosing 연결된 새 Env</p></div>
+    <div class="step"><div class="n">4</div><h4>Storage</h4><p>HashMap에 binding, 사슬로 탐색</p></div>
+    <div class="step"><div class="n">5</div><h4>Restore</h4><p>블록 끝 finally로 환경 복원</p></div>
+  </div>
+</section>
+
+</div>
+
+<footer>
+  <p>Crafting Interpreters — Chapter 8: Statements &amp; State 시각화 노트</p>
+  <p>원문: <a href="https://craftinginterpreters.com/statements-and-state.html" target="_blank">craftinginterpreters.com/statements-and-state.html</a></p>
+</footer>
+
+<script>
+const chain = [
+  { id:'env-block',  name:'Block Env',  depth:0 },
+  { id:'env-global', name:'Global Env', depth:1 }
+];
+
+function resetEnvs(){
+  document.querySelectorAll('.lookup-env').forEach(e=>e.classList.remove('searching','found'));
+  document.querySelectorAll('.binding').forEach(b=>b.classList.remove('hit'));
+}
+
+async function lookup(target){
+  resetEnvs();
+  const log = document.getElementById('lookup-log');
+  log.textContent = `▶ environment.get("${target}") 호출\n`;
+  await sleep(300);
+
+  for (const env of chain){
+    const el = document.getElementById(env.id);
+    el.classList.add('searching');
+    log.textContent += `\n🔎 ${env.name} (depth ${env.depth}) 의 HashMap 검색...`;
+    await sleep(700);
+
+    const binding = el.querySelector(`.binding[data-name="${target}"]`);
+    if (binding){
+      el.classList.remove('searching');
+      el.classList.add('found');
+      binding.classList.add('hit');
+      const val = binding.querySelector('.vval').textContent;
+      log.textContent += `\n✅ 찾음! ${target} = ${val}`;
+      if (env.depth>0) log.textContent += `  (바깥 스코프에서 발견 — 사슬을 ${env.depth}칸 거슬러 올라감)`;
+      else log.textContent += `  (현재 스코프에서 바로 발견 — shadowing 적용)`;
+      return;
+    }
+    log.textContent += `  → 없음, enclosing 으로 이동 ↑`;
+    el.classList.remove('searching');
+    el.style.opacity = .35;
+    await sleep(500);
+  }
+
+  document.querySelectorAll('.lookup-env').forEach(e=>{e.style.opacity=1});
+  log.textContent += `\n\n❌ RuntimeError: Undefined variable '${target}'.\n   (사슬 끝까지 갔지만 enclosing == null)`;
+}
+
+const sleep = ms => new Promise(r=>setTimeout(r,ms));
+// restore opacity when a new lookup starts
+const _orig = lookup;
+</script>
+</body>
+</html>

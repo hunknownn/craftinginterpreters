@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crafting Interpreters — Ch.9 Control Flow 시각화</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2330; --border:#30363d;
+    --txt:#e6edf3; --muted:#8b949e; --accent:#58a6ff; --accent2:#bc8cff;
+    --green:#3fb950; --orange:#d29922; --pink:#f778ba; --red:#f85149;
+    --mono:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Apple SD Gothic Neo",sans-serif;line-height:1.7}
+  header{text-align:center;padding:48px 20px 32px;
+    background:radial-gradient(900px 400px at 50% -10%,rgba(188,140,255,.18),transparent 70%);
+    border-bottom:1px solid var(--border)}
+  header .eyebrow{color:var(--accent2);font-weight:600;letter-spacing:.08em;font-size:.85rem;text-transform:uppercase}
+  header h1{margin:.3em 0 .1em;font-size:2.2rem}
+  header p{color:var(--muted);margin:.2em 0;font-size:1rem}
+  .wrap{max-width:1000px;margin:0 auto;padding:0 20px}
+  nav{position:sticky;top:0;z-index:10;background:rgba(13,17,23,.85);backdrop-filter:blur(8px);
+    border-bottom:1px solid var(--border);display:flex;gap:6px;flex-wrap:wrap;justify-content:center;padding:10px}
+  nav a{color:var(--muted);text-decoration:none;font-size:.82rem;padding:5px 11px;border-radius:20px;
+    border:1px solid transparent;transition:.15s}
+  nav a:hover{color:var(--txt);border-color:var(--border);background:var(--panel)}
+  section{padding:46px 0;border-bottom:1px solid var(--border)}
+  h2{font-size:1.55rem;display:flex;align-items:center;gap:12px;margin:0 0 6px}
+  h2 .num{background:linear-gradient(135deg,var(--accent2),var(--pink));color:#0d1117;font-weight:800;
+    border-radius:9px;width:34px;height:34px;display:grid;place-items:center;font-size:1rem;flex:none}
+  .lead{color:var(--muted);margin:0 0 22px}
+  h3{font-size:1.05rem;margin:26px 0 10px;color:var(--accent2)}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:20px;margin:14px 0}
+  code{font-family:var(--mono);background:var(--panel2);padding:.12em .4em;border-radius:5px;font-size:.9em}
+  pre{font-family:var(--mono);background:#0a0e14;border:1px solid var(--border);border-radius:10px;
+    padding:16px;overflow-x:auto;font-size:.86rem;line-height:1.55;margin:10px 0}
+  .kw{color:var(--pink)} .str{color:var(--green)} .com{color:var(--muted)}
+  .ty{color:var(--accent2)} .fn{color:var(--accent)} .lit{color:var(--orange)}
+  .grammar{display:flex;flex-direction:column;gap:0}
+  .grule{display:grid;grid-template-columns:130px 18px 1fr;align-items:start;gap:10px;padding:9px 12px;
+    border-radius:8px;font-family:var(--mono);font-size:.85rem}
+  .grule:nth-child(odd){background:var(--panel2)}
+  .grule .lhs{color:var(--accent2);font-weight:700;text-align:right}
+  .grule .arrow{color:var(--muted)}
+  .grule .new{color:var(--green)}
+  .tag-new{font-size:.65rem;background:var(--green);color:#0d1117;border-radius:4px;padding:1px 6px;font-weight:700;margin-left:8px;vertical-align:middle}
+  .callout{border-left:3px solid var(--accent);background:rgba(88,166,255,.08);padding:12px 16px;border-radius:0 8px 8px 0;margin:14px 0}
+  .callout.warn{border-color:var(--orange);background:rgba(210,153,34,.08)}
+  .callout.danger{border-color:var(--red);background:rgba(248,81,73,.08)}
+  .callout.good{border-color:var(--green);background:rgba(63,185,80,.08)}
+  .callout b{color:var(--accent)} .callout.warn b{color:var(--orange)}
+  .callout.danger b{color:var(--red)} .callout.good b{color:var(--green)}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:680px){.two{grid-template-columns:1fr}.grule{grid-template-columns:90px 14px 1fr}}
+  .nodes{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
+  .node{border:1px solid var(--border);border-radius:11px;padding:14px;background:var(--panel2)}
+  .node.stmt{border-left:3px solid var(--orange)} .node.expr{border-left:3px solid var(--accent)}
+  .node h4{margin:0 0 6px;font-family:var(--mono);font-size:.92rem}
+  .node.stmt h4{color:var(--orange)} .node.expr h4{color:var(--accent)}
+  .node p{margin:0;font-size:.83rem;color:var(--muted)}
+  .node .fields{font-family:var(--mono);font-size:.74rem;color:var(--green);margin-top:8px;display:block}
+  .flow{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:14px 0}
+  .step{background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:13px;position:relative}
+  .step .n{position:absolute;top:-10px;left:-10px;width:26px;height:26px;background:var(--accent2);color:#0d1117;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:.8rem}
+  .step h4{margin:2px 0 5px;font-size:.9rem} .step p{margin:0;font-size:.78rem;color:var(--muted)}
+  /* demo */
+  .demo{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:20px;margin:16px 0}
+  .demo .controls{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+  .demo button{font-family:var(--mono);font-size:.84rem;background:var(--panel2);color:var(--txt);
+    border:1px solid var(--border);border-radius:8px;padding:8px 14px;cursor:pointer;transition:.15s}
+  .demo button:hover{border-color:var(--accent2);color:var(--accent2)}
+  .demolog{font-family:var(--mono);font-size:.82rem;margin-top:14px;padding:12px;background:#0a0e14;
+    border-radius:8px;border:1px solid var(--border);min-height:70px;white-space:pre-wrap}
+  .pill{display:inline-block;font-size:.7rem;font-family:var(--mono);padding:2px 8px;border-radius:20px;border:1px solid var(--border);color:var(--muted);margin-left:6px}
+  /* dangling else */
+  .branch{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin:14px 0}
+  .ifbox{border:1px solid var(--border);border-radius:10px;padding:12px 16px;background:var(--panel2);font-family:var(--mono);font-size:.82rem}
+  .ifbox .cond{color:var(--accent)} .ifbox .elsebind{color:var(--green);font-weight:700}
+  /* desugar */
+  .desugar{display:grid;grid-template-columns:1fr 40px 1fr;align-items:center;gap:8px}
+  @media(max-width:680px){.desugar{grid-template-columns:1fr;}.desugar .mid{transform:rotate(90deg)}}
+  .desugar .mid{text-align:center;font-size:1.8rem;color:var(--green)}
+  .clausebtn{cursor:pointer;transition:.2s;border-radius:6px;padding:1px 3px}
+  .hl-init{background:rgba(63,185,80,.25);outline:1px solid var(--green)}
+  .hl-cond{background:rgba(88,166,255,.25);outline:1px solid var(--accent)}
+  .hl-incr{background:rgba(247,120,186,.25);outline:1px solid var(--pink)}
+  .hl-body{background:rgba(210,153,34,.25);outline:1px solid var(--orange)}
+  footer{text-align:center;padding:30px;color:var(--muted);font-size:.85rem}
+  footer a{color:var(--accent)}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="eyebrow">Crafting Interpreters · Part II (jlox)</div>
+  <h1>Chapter 9 — Control Flow</h1>
+  <p>분기와 반복으로 인터프리터에 <b>튜링 완전성</b>을 부여하다</p>
+  <p class="pill">if/else · and/or 단락평가 · while · for 디슈가링</p>
+</header>
+
+<nav>
+  <a href="#s0">⓪ 튜링 완전</a>
+  <a href="#s1">① if / else</a>
+  <a href="#s2">② 논리 연산자</a>
+  <a href="#s3">③ while</a>
+  <a href="#s4">④ for 디슈가링</a>
+  <a href="#demo">🔌 단락평가 데모</a>
+  <a href="#nodes">🌳 AST 노드</a>
+</nav>
+
+<div class="wrap">
+
+<section id="s0">
+  <p class="lead">
+    8장까지의 언어는 변수를 기억하고 출력할 수 있지만, 코드는 <b>위에서 아래로 한 번</b> 흐를 뿐입니다.
+    조건에 따라 <b>건너뛰거나</b>, 같은 코드를 <b>반복</b>할 수 없죠. 9장은 <b>제어 흐름(control flow)</b> 을 추가해
+    언어를 비로소 <b>튜링 완전</b>하게 만듭니다.
+  </p>
+  <div class="callout">
+    <b>튜링 완전의 조건</b> &nbsp;산술 + 약간의 <b>제어 흐름</b> + (이론상) 무한한 메모리.
+    9장에서 "제어 흐름"이 채워지면 Lox는 계산 가능한 모든 함수를 표현할 수 있게 됩니다.
+  </div>
+  <h3>제어 흐름의 두 갈래</h3>
+  <div class="two">
+    <div class="card"><h4 style="margin-top:0;color:var(--accent)">분기 (Branching)</h4>
+      <p style="font-size:.88rem;color:var(--muted);margin:0">조건에 따라 코드를 <b>실행하거나 건너뛴다</b>. → <code>if</code>, <code>and</code>/<code>or</code></p></div>
+    <div class="card"><h4 style="margin-top:0;color:var(--pink)">반복 (Looping)</h4>
+      <p style="font-size:.88rem;color:var(--muted);margin:0">코드를 <b>여러 번 실행</b>한다. → <code>while</code>, <code>for</code></p></div>
+  </div>
+</section>
+
+<!-- if -->
+<section id="s1">
+  <h2><span class="num">1</span>조건 실행 — if / else</h2>
+  <p class="lead">조건이 참이면 then 가지를, 거짓이면 else 가지를 실행. else는 선택사항입니다.</p>
+
+  <pre><span class="kw">if</span> (condition) {
+  <span class="kw">print</span> <span class="str">"참일 때"</span>;
+} <span class="kw">else</span> {
+  <span class="kw">print</span> <span class="str">"거짓일 때"</span>;
+}</pre>
+
+  <div class="card">
+    <div class="grammar">
+      <div class="grule"><span class="lhs">statement</span><span class="arrow">→</span><span class="rhs">exprStmt | <span class="new">ifStmt</span> | printStmt | block <span class="tag-new">NEW</span></span></div>
+      <div class="grule"><span class="lhs">ifStmt</span><span class="arrow">→</span><span class="rhs"><span class="new">"if" "(" expression ")" statement ( "else" statement )?</span> <span class="tag-new">NEW</span></span></div>
+    </div>
+  </div>
+
+  <h3>⚠️ 단글링 else 문제 (dangling else)</h3>
+  <p style="color:var(--muted);font-size:.92rem">아래 코드에서 <code>else</code>는 어느 <code>if</code>에 붙을까요? 문법만으로는 <b>모호(ambiguous)</b> 합니다.</p>
+  <pre><span class="kw">if</span> (first) <span class="kw">if</span> (second) whenTrue(); <span class="kw">else</span> whenFalse();</pre>
+  <div class="branch">
+    <div class="ifbox">
+      <div style="color:var(--muted);margin-bottom:6px">해석 A — 안쪽 if에 붙음</div>
+      if (first)<br>&nbsp;&nbsp;<span class="cond">if (second)</span> whenTrue();<br>&nbsp;&nbsp;<span class="elsebind">else</span> whenFalse(); ✅
+    </div>
+    <div class="ifbox" style="opacity:.5">
+      <div style="color:var(--muted);margin-bottom:6px">해석 B — 바깥 if에 붙음</div>
+      <span class="cond">if (first)</span><br>&nbsp;&nbsp;if (second) whenTrue();<br><span style="text-decoration:line-through">else whenFalse();</span> ❌
+    </div>
+  </div>
+  <div class="callout good">
+    <b>해결</b> &nbsp;"else는 <b>가장 가까운 앞쪽 if</b>에 묶인다." 파서가 <code>else</code>를 보자마자
+    <b>즉시(eagerly)</b> 현재 if에 매칭하면 자연스럽게 이 규칙이 적용됩니다 — 별도 처리 불필요.
+  </div>
+</section>
+
+<!-- logical -->
+<section id="s2">
+  <h2><span class="num">2</span>논리 연산자 — and / or</h2>
+  <p class="lead"><code>and</code>, <code>or</code>는 <b>일반 이항 연산자와 다릅니다.</b> 단락 평가를 하고, 불린이 아니라 <b>피연산자 값</b>을 돌려주기 때문이죠.</p>
+
+  <div class="card">
+    <div class="grammar">
+      <div class="grule"><span class="lhs">assignment</span><span class="arrow">→</span><span class="rhs">IDENTIFIER "=" assignment | <span class="new">logic_or</span></span></div>
+      <div class="grule"><span class="lhs">logic_or</span><span class="arrow">→</span><span class="rhs"><span class="new">logic_and ( "or" logic_and )*</span> <span class="tag-new">NEW</span></span></div>
+      <div class="grule"><span class="lhs">logic_and</span><span class="arrow">→</span><span class="rhs"><span class="new">equality ( "and" equality )*</span> <span class="tag-new">NEW</span></span></div>
+    </div>
+    <p style="font-size:.82rem;color:var(--muted);margin:10px 0 0">우선순위: <code>or</code> 가 <code>and</code> 보다 낮다 (assignment → or → and → equality → ...).</p>
+  </div>
+
+  <div class="two">
+    <div class="card">
+      <h4 style="margin-top:0;color:var(--orange)">① 단락 평가 (short-circuit)</h4>
+      <p style="font-size:.85rem;color:var(--muted);margin:0 0 8px">왼쪽만 보고 결과가 정해지면 <b>오른쪽은 평가조차 안 함.</b></p>
+      <pre style="margin:0"><span class="com">// or: 왼쪽이 truthy면 끝</span>
+true <span class="kw">or</span> sideEffect();  <span class="com">// 호출 안 됨</span>
+<span class="com">// and: 왼쪽이 falsey면 끝</span>
+false <span class="kw">and</span> sideEffect(); <span class="com">// 호출 안 됨</span></pre>
+    </div>
+    <div class="card">
+      <h4 style="margin-top:0;color:var(--green)">② 값을 돌려준다 (불린 아님)</h4>
+      <p style="font-size:.85rem;color:var(--muted);margin:0 0 8px">"적절한 truthiness를 가진 <b>피연산자</b>"를 반환.</p>
+      <pre style="margin:0"><span class="kw">print</span> <span class="str">"hi"</span> <span class="kw">or</span> <span class="lit">2</span>;   <span class="com">// "hi" (true 아님!)</span>
+<span class="kw">print</span> nil <span class="kw">or</span> <span class="str">"yes"</span>; <span class="com">// "yes"</span>
+<span class="kw">print</span> nil <span class="kw">and</span> <span class="lit">2</span>;   <span class="com">// nil</span></pre>
+    </div>
+  </div>
+
+  <div class="callout warn">
+    <b>왜 <code>Expr.Binary</code>를 재사용 안 하나?</b> &nbsp;일반 이항 연산자는 <b>양쪽을 먼저 평가</b>한 뒤 계산합니다.
+    하지만 논리 연산자는 <b>왼쪽을 먼저 보고, 필요할 때만</b> 오른쪽을 평가해야 하므로 평가 방식 자체가 달라
+    별도의 <code>Expr.Logical</code> 노드가 필요합니다.
+  </div>
+</section>
+
+<!-- while -->
+<section id="s3">
+  <h2><span class="num">3</span>while 루프</h2>
+  <p class="lead">조건이 참인 동안 본문을 반복. 가장 단순한 반복 형태입니다.</p>
+  <pre><span class="kw">var</span> i = <span class="lit">0</span>;
+<span class="kw">while</span> (i &lt; <span class="lit">3</span>) {
+  <span class="kw">print</span> i;
+  i = i + <span class="lit">1</span>;
+}</pre>
+  <div class="card">
+    <div class="grammar">
+      <div class="grule"><span class="lhs">statement</span><span class="arrow">→</span><span class="rhs">... | <span class="new">whileStmt</span> | ... <span class="tag-new">NEW</span></span></div>
+      <div class="grule"><span class="lhs">whileStmt</span><span class="arrow">→</span><span class="rhs"><span class="new">"while" "(" expression ")" statement</span> <span class="tag-new">NEW</span></span></div>
+    </div>
+  </div>
+  <div class="callout">
+    인터프리터의 <code>visitWhileStmt</code>는 Java의 <code>while</code> 루프로 감쌉니다. 소스 코드 길이와 무관하게
+    실행 시간이 늘어날 수 있게 되어 — 이 지점에서 진짜 "반복 계산"이 가능해집니다.
+  </div>
+</section>
+
+<!-- for desugar -->
+<section id="s4">
+  <h2><span class="num">4</span>for 루프 = 문법 설탕 (디슈가링)</h2>
+  <p class="lead">
+    for문은 <b>새 AST 노드를 만들지 않습니다.</b> 이미 있는 <code>while</code>·<code>block</code>으로
+    <b>변환(desugar)</b> 될 뿐이죠. 인터프리터는 for를 전혀 몰라도 됩니다.
+  </p>
+  <div class="card">
+    <div class="grammar">
+      <div class="grule"><span class="lhs">forStmt</span><span class="arrow">→</span><span class="rhs"><span class="new">"for" "(" ( varDecl | exprStmt | ";" )</span></span></div>
+      <div class="grule"><span class="lhs"></span><span class="arrow"></span><span class="rhs"><span class="new">expression? ";" expression? ")" statement</span> <span class="tag-new">NEW</span></span></div>
+    </div>
+    <p style="font-size:.82rem;color:var(--muted);margin:10px 0 0">세 절: <span class="hl-init">초기화</span> ; <span class="hl-cond">조건</span> ; <span class="hl-incr">증감</span> — 모두 생략 가능.</p>
+  </div>
+
+  <h3>디슈가링 변환 (절을 클릭해 대응 관계 확인)</h3>
+  <div class="card">
+    <div class="desugar">
+      <div>
+        <div style="font-size:.78rem;color:var(--muted);margin-bottom:6px">원본 for문</div>
+        <pre style="margin:0"><span class="kw">for</span> (<span class="clausebtn hl-init" data-c="init">var i = 0</span>; <span class="clausebtn" data-c="cond">i &lt; 10</span>; <span class="clausebtn" data-c="incr">i = i + 1</span>)
+  <span class="clausebtn" data-c="body">print i;</span></pre>
+      </div>
+      <div class="mid">➜</div>
+      <div>
+        <div style="font-size:.78rem;color:var(--muted);margin-bottom:6px">디슈가링된 결과</div>
+        <pre style="margin:0">{
+  <span class="clausebtn" data-c="init">var i = 0;</span>
+  <span class="kw">while</span> (<span class="clausebtn" data-c="cond">i &lt; 10</span>) {
+    <span class="clausebtn" data-c="body">print i;</span>
+    <span class="clausebtn" data-c="incr">i = i + 1;</span>
+  }
+}</pre>
+      </div>
+    </div>
+  </div>
+
+  <h3>파서가 거꾸로 조립하는 순서</h3>
+  <div class="flow">
+    <div class="step"><div class="n">1</div><h4>본문 + 증감</h4><p><span class="hl-incr">증감</span>이 있으면 본문을 <code>{ body; 증감; }</code> 블록으로 감싼다</p></div>
+    <div class="step"><div class="n">2</div><h4>조건 → while</h4><p><span class="hl-cond">조건</span>으로 while 생성. 조건 생략 시 <code>true</code>(무한루프)</p></div>
+    <div class="step"><div class="n">3</div><h4>초기화로 감싸기</h4><p><span class="hl-init">초기화</span>가 있으면 전체를 <code>{ 초기화; while... }</code> 블록으로</p></div>
+  </div>
+
+  <div class="callout good">
+    <b>디슈가링의 이점</b> &nbsp;프론트엔드(파서)에서 기존 노드로 변환만 하면, 백엔드(인터프리터)는
+    <b>건드릴 필요가 없습니다.</b> 편의 문법을 공짜로 얻는 셈 — Lisp, C++, Ruby 등이 정도의 차이는 있어도 같은 전략을 씁니다.
+  </div>
+</section>
+
+<!-- short-circuit demo -->
+<section id="demo">
+  <h2>🔌 단락 평가 인터랙티브 데모</h2>
+  <p class="lead">버튼을 눌러, <code>and</code>/<code>or</code>가 오른쪽을 평가하는지 건너뛰는지 단계별로 확인하세요. <code>sideEffect()</code>는 호출되면 로그를 남깁니다.</p>
+  <div class="demo">
+    <div class="controls">
+      <button onclick="evalLogic('or', true)">true  or  sideEffect()</button>
+      <button onclick="evalLogic('or', false)">false  or  sideEffect()</button>
+      <button onclick="evalLogic('and', true)">true  and  sideEffect()</button>
+      <button onclick="evalLogic('and', false)">false  and  sideEffect()</button>
+    </div>
+    <div class="demolog" id="logiclog">▶ 버튼을 눌러 평가를 시작하세요.</div>
+  </div>
+</section>
+
+<!-- nodes -->
+<section id="nodes">
+  <h2>🌳 9장에서 추가된 AST 노드</h2>
+  <p class="lead">단 3개. for문은 디슈가링되므로 <b>전용 노드가 없습니다.</b></p>
+  <div class="nodes">
+    <div class="node stmt"><h4>Stmt.If</h4><p>조건 분기. elseBranch는 nullable.</p><span class="fields">Expr condition, Stmt thenBranch, Stmt elseBranch</span></div>
+    <div class="node stmt"><h4>Stmt.While</h4><p>조건이 참인 동안 body 반복.</p><span class="fields">Expr condition, Stmt body</span></div>
+    <div class="node expr"><h4>Expr.Logical</h4><p>and/or. 단락 평가 위해 Binary와 분리.</p><span class="fields">Expr left, Token operator, Expr right</span></div>
+    <div class="node" style="border-left:3px dashed var(--muted);opacity:.7"><h4 style="color:var(--muted)">Stmt.For ❌</h4><p>없음! 디슈가링으로 while+block에 흡수됨.</p></div>
+  </div>
+</section>
+
+</div>
+
+<footer>
+  <p>Crafting Interpreters — Chapter 9: Control Flow 시각화 노트</p>
+  <p>원문: <a href="https://craftinginterpreters.com/control-flow.html" target="_blank">craftinginterpreters.com/control-flow.html</a></p>
+</footer>
+
+<script>
+const sleep = ms => new Promise(r=>setTimeout(r,ms));
+
+async function evalLogic(op, leftVal){
+  const log = document.getElementById('logiclog');
+  const opName = op === 'or' ? 'or' : 'and';
+  log.textContent = `▶ ${leftVal} ${opName} sideEffect()  평가 시작\n`;
+  await sleep(400);
+  log.textContent += `\n1️⃣ 왼쪽 피연산자 평가 → ${leftVal}`;
+  await sleep(600);
+
+  // or: short-circuit if truthy. and: short-circuit if falsey.
+  const shortCircuit = (op === 'or') ? leftVal === true : leftVal === false;
+
+  if (shortCircuit){
+    log.textContent += `\n2️⃣ ${op==='or'?'왼쪽이 truthy → or는 더 볼 것 없음':'왼쪽이 falsey → and는 더 볼 것 없음'}`;
+    await sleep(600);
+    log.textContent += `\n⏭️  오른쪽 sideEffect() 평가 건너뜀 (단락!)`;
+    await sleep(500);
+    log.textContent += `\n✅ 결과 = ${leftVal}  (왼쪽 값을 그대로 반환)`;
+  } else {
+    log.textContent += `\n2️⃣ ${op==='or'?'왼쪽이 falsey → 오른쪽도 봐야 함':'왼쪽이 truthy → 오른쪽도 봐야 함'}`;
+    await sleep(600);
+    log.textContent += `\n3️⃣ 오른쪽 sideEffect() 평가...`;
+    await sleep(500);
+    log.textContent += `\n   💥 sideEffect() 호출됨! → 반환값 "effect"`;
+    await sleep(600);
+    log.textContent += `\n✅ 결과 = "effect"  (오른쪽 값을 반환)`;
+  }
+}
+
+// desugar clause highlight
+const colorMap={init:'hl-init',cond:'hl-cond',incr:'hl-incr',body:'hl-body'};
+let activeClause=null;
+document.querySelectorAll('.clausebtn').forEach(el=>{
+  el.addEventListener('mouseenter',()=>highlightClause(el.dataset.c));
+  el.addEventListener('mouseleave',clearClause);
+  el.addEventListener('click',()=>{activeClause = activeClause===el.dataset.c?null:el.dataset.c; refresh();});
+});
+function highlightClause(c){
+  document.querySelectorAll(`.clausebtn[data-c="${c}"]`).forEach(e=>e.classList.add(colorMap[c]));
+}
+function clearClause(){ refresh(); }
+function refresh(){
+  document.querySelectorAll('.clausebtn').forEach(e=>{
+    e.classList.remove('hl-init','hl-cond','hl-incr','hl-body');
+    if(activeClause && e.dataset.c===activeClause) e.classList.add(colorMap[activeClause]);
+  });
+}
+// init clause already styled in markup for the "var i=0" original; normalize
+refresh();
+</script>
+</body>
+</html>
