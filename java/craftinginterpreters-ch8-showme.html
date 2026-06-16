@@ -1,0 +1,805 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Crafting Interpreters 8장: Statements and State</title>
+  <style>
+    :root {
+      --bg: #101217;
+      --panel: #1a1d25;
+      --panel-2: #212633;
+      --border: #313849;
+      --text: #edf1f7;
+      --muted: #a3adbf;
+      --blue: #5aa7ff;
+      --green: #47d18c;
+      --yellow: #f6bd4f;
+      --red: #ff6f78;
+      --ink: #0b0d12;
+      --code: #151923;
+      --shadow: 0 18px 50px rgba(0, 0, 0, .28);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 12% 8%, rgba(90, 167, 255, .12), transparent 34rem),
+        radial-gradient(circle at 92% 4%, rgba(71, 209, 140, .10), transparent 30rem),
+        var(--bg);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", sans-serif;
+      line-height: 1.55;
+    }
+
+    header, main {
+      width: min(1180px, calc(100% - 32px));
+      margin: 0 auto;
+    }
+
+    header {
+      padding: 48px 0 24px;
+    }
+
+    h1, h2, h3, p { margin: 0; }
+
+    h1 {
+      font-size: clamp(2rem, 5vw, 4.6rem);
+      line-height: 1.05;
+      letter-spacing: 0;
+      max-width: 900px;
+    }
+
+    h2 {
+      font-size: clamp(1.5rem, 2.8vw, 2.3rem);
+      margin-bottom: 14px;
+    }
+
+    h3 {
+      font-size: 1.05rem;
+      margin-bottom: 10px;
+    }
+
+    .subtitle {
+      margin-top: 16px;
+      max-width: 760px;
+      color: var(--muted);
+      font-size: 1.08rem;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 10px;
+      margin-bottom: 14px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: var(--muted);
+      background: rgba(26, 29, 37, .76);
+      font-size: .86rem;
+    }
+
+    main {
+      padding: 16px 0 54px;
+    }
+
+    section {
+      margin-top: 22px;
+      padding: 24px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: rgba(26, 29, 37, .86);
+      box-shadow: var(--shadow);
+    }
+
+    .roadmap {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .road-step {
+      min-height: 150px;
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--panel-2);
+      position: relative;
+    }
+
+    .road-step::after {
+      content: "→";
+      position: absolute;
+      right: -16px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--yellow);
+      font-weight: 800;
+    }
+
+    .road-step:last-child::after { content: ""; }
+
+    .road-step strong {
+      display: block;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+
+    .road-step span {
+      color: var(--muted);
+      font-size: .94rem;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(320px, .9fr);
+      gap: 18px;
+      align-items: start;
+    }
+
+    .panel {
+      padding: 18px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--panel-2);
+    }
+
+    .muted { color: var(--muted); }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 16px 0;
+    }
+
+    button {
+      border: 1px solid transparent;
+      border-radius: 10px;
+      padding: 10px 13px;
+      color: var(--ink);
+      background: var(--blue);
+      font-weight: 750;
+      cursor: pointer;
+      transition: transform .16s ease, filter .16s ease, border-color .16s ease;
+      font-family: inherit;
+    }
+
+    button:hover { transform: translateY(-1px); filter: brightness(1.06); }
+    button.secondary { background: transparent; color: var(--text); border-color: var(--border); }
+    button.warn { background: var(--yellow); }
+    button.danger { background: var(--red); color: #fff; }
+    button.ok { background: var(--green); }
+
+    .code {
+      padding: 16px;
+      overflow: auto;
+      border-radius: 12px;
+      background: var(--code);
+      border: 1px solid #2b3242;
+      font-family: "SF Mono", Menlo, Consolas, monospace;
+      font-size: .91rem;
+      white-space: pre;
+    }
+
+    .kw { color: #ffca77; }
+    .str { color: #8be9b3; }
+    .num { color: #8cc7ff; }
+    .com { color: #7f899b; }
+    .id { color: #f2f5fb; }
+
+    .ast-stage {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      min-height: 185px;
+    }
+
+    .ast-card {
+      padding: 14px;
+      border: 1px dashed var(--border);
+      border-radius: 12px;
+      background: rgba(16, 18, 23, .54);
+      opacity: .42;
+      transform: translateY(6px);
+      transition: opacity .22s ease, transform .22s ease, border-color .22s ease;
+    }
+
+    .ast-card.active {
+      opacity: 1;
+      transform: translateY(0);
+      border-color: var(--blue);
+      background: rgba(90, 167, 255, .12);
+    }
+
+    .ast-card strong { display: block; margin-bottom: 8px; }
+
+    .env-wrap {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      align-items: stretch;
+    }
+
+    .env {
+      min-height: 220px;
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: rgba(16, 18, 23, .58);
+      position: relative;
+      transition: border-color .2s ease, background .2s ease;
+    }
+
+    .env.active {
+      border-color: var(--green);
+      background: rgba(71, 209, 140, .10);
+    }
+
+    .env.miss {
+      border-color: var(--red);
+      background: rgba(255, 111, 120, .10);
+    }
+
+    .env-title {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 12px;
+      color: var(--muted);
+      font-size: .86rem;
+    }
+
+    .slot {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      padding: 10px;
+      margin: 8px 0;
+      border-radius: 10px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      font-family: "SF Mono", Menlo, Consolas, monospace;
+      transition: background .2s ease, border-color .2s ease;
+    }
+
+    .slot.hot {
+      border-color: var(--yellow);
+      background: rgba(246, 189, 79, .16);
+    }
+
+    .arrowline {
+      margin: 10px 0;
+      color: var(--yellow);
+      text-align: center;
+      font-weight: 800;
+    }
+
+    .log {
+      min-height: 160px;
+      max-height: 240px;
+      overflow: auto;
+      padding: 14px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: #11151d;
+      font-family: "SF Mono", Menlo, Consolas, monospace;
+      font-size: .86rem;
+      color: #dbe3ef;
+    }
+
+    .log div { margin: 0 0 8px; }
+    .log b { color: var(--green); }
+    .log .err { color: var(--red); }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .mini {
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--panel-2);
+    }
+
+    .mini strong { display: block; margin-bottom: 8px; color: var(--text); }
+    .mini p { color: var(--muted); font-size: .92rem; }
+
+    .scope-demo {
+      display: grid;
+      grid-template-columns: minmax(0, .86fr) minmax(0, 1.14fr);
+      gap: 16px;
+    }
+
+    .scope-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .frame {
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: #161b25;
+      transform-origin: top;
+      transition: transform .2s ease, opacity .2s ease, border-color .2s ease;
+    }
+
+    .frame.hidden {
+      transform: scaleY(.2);
+      opacity: .24;
+    }
+
+    .frame.current { border-color: var(--green); }
+
+    .output {
+      min-height: 54px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: #11151d;
+      font-family: "SF Mono", Menlo, Consolas, monospace;
+    }
+
+    .pill {
+      display: inline-flex;
+      padding: 6px 9px;
+      border-radius: 999px;
+      color: var(--ink);
+      background: var(--green);
+      font-weight: 800;
+    }
+
+    .trade {
+      display: grid;
+      grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr);
+      gap: 16px;
+      align-items: start;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--yellow);
+    }
+
+    .meter {
+      height: 14px;
+      overflow: hidden;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: #11151d;
+      margin-top: 10px;
+    }
+
+    .meter span {
+      display: block;
+      height: 100%;
+      width: 50%;
+      background: linear-gradient(90deg, var(--green), var(--yellow), var(--red));
+      transition: width .16s ease;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      overflow: hidden;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+    }
+
+    th, td {
+      padding: 12px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th { color: var(--text); background: #151923; }
+    td { color: var(--muted); background: rgba(33, 38, 51, .58); }
+    tr:last-child td { border-bottom: 0; }
+
+    @media (max-width: 880px) {
+      .roadmap, .grid, .env-wrap, .cards, .scope-demo, .trade {
+        grid-template-columns: 1fr;
+      }
+
+      .road-step::after { display: none; }
+      section { padding: 18px; }
+      .ast-stage { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="badge">Crafting Interpreters · Chapter 8</div>
+    <h1>문장이 상태를 만들고, 환경이 그 상태를 붙잡는다</h1>
+    <p class="subtitle">8장은 Lox가 계산기에서 작은 프로그램 언어로 넘어가는 지점입니다. 표현식만 평가하던 인터프리터가 변수 선언, 대입, 블록 스코프를 실행하려면 “지금 어떤 이름이 어떤 값을 가리키는가”를 저장해야 합니다.</p>
+  </header>
+
+  <main>
+    <section>
+      <h2>로드맵</h2>
+      <div class="roadmap">
+        <div class="road-step">
+          <strong>표현식만으로는 부족</strong>
+          <span>값을 계산할 수는 있지만, 계산 결과를 이름에 보관하거나 여러 줄 프로그램을 자연스럽게 실행하기 어렵다.</span>
+        </div>
+        <div class="road-step">
+          <strong>Stmt AST 추가</strong>
+          <span><code>print</code>, 표현식 문장, <code>var</code>, 블록을 별도 노드로 만들고 파서는 declaration부터 시작한다.</span>
+        </div>
+        <div class="road-step">
+          <strong>Environment</strong>
+          <span><code>Map&lt;String, Object&gt;</code>와 바깥 환경 포인터로 이름 검색, 정의, 대입을 처리한다.</span>
+        </div>
+        <div class="road-step">
+          <strong>블록 스코프</strong>
+          <span>중괄호에 들어가면 새 환경을 만들고, 끝나면 이전 환경으로 복구한다.</span>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>1. 왜 Stmt가 필요한가</h2>
+      <div class="grid">
+        <div class="panel">
+          <h3>문제 재현: 표현식 AST만 있을 때</h3>
+          <p class="muted">7장까지의 인터프리터는 “값 하나를 평가한다”는 관점입니다. 그런데 아래 코드는 값을 계산하는 식과, 효과를 일으키는 문장이 섞여 있습니다.</p>
+          <div class="code" aria-label="Lox code"><span class="kw">var</span> <span class="id">breakfast</span> = <span class="str">"beignets"</span>;
+<span class="kw">print</span> <span class="id">breakfast</span>;
+<span class="id">breakfast</span> = <span class="str">"espresso"</span>;
+<span class="id">breakfast</span>;</div>
+          <div class="controls">
+            <button onclick="stmtStep()">다음 실행 단계</button>
+            <button class="secondary" onclick="resetStmt()">초기화</button>
+          </div>
+          <div class="ast-stage">
+            <div id="stmtAst0" class="ast-card">
+              <strong>Stmt.Var</strong>
+              이름과 초기화 식을 받아 환경에 정의한다.
+            </div>
+            <div id="stmtAst1" class="ast-card">
+              <strong>Stmt.Print</strong>
+              식을 평가한 뒤 사용자에게 출력한다.
+            </div>
+            <div id="stmtAst2" class="ast-card">
+              <strong>Stmt.Expression</strong>
+              대입처럼 값보다 효과가 중요한 식도 한 줄 문장이 된다.
+            </div>
+          </div>
+        </div>
+        <div class="panel">
+          <h3>실행 로그</h3>
+          <div id="stmtLog" class="log"></div>
+        </div>
+      </div>
+      <div class="cards">
+        <div class="mini"><strong>등장 원인</strong><p>REPL 계산기를 넘어서 파일 단위 프로그램을 실행하려면 여러 문장을 순서대로 실행해야 한다.</p></div>
+        <div class="mini"><strong>해결 문제</strong><p>표현식은 값을 돌려주지만, 변수 선언과 출력은 “효과”가 핵심이라 별도 AST 계층이 필요하다.</p></div>
+        <div class="mini"><strong>메커니즘</strong><p><code>parse()</code>가 <code>List&lt;Stmt&gt;</code>를 만들고 인터프리터는 각 문장을 방문한다.</p></div>
+        <div class="mini"><strong>대가</strong><p>문법 계층이 늘고, 파서가 선언과 문장 복구까지 책임져야 한다.</p></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>2. Environment: 이름을 값으로 바꾸는 저장소</h2>
+      <div class="grid">
+        <div class="panel">
+          <h3>해결 메커니즘 시뮬레이션</h3>
+          <p class="muted"><code>define()</code>은 현재 환경에 슬롯을 만들고, <code>get()</code>과 <code>assign()</code>은 현재 환경에서 시작해 바깥 환경으로 올라갑니다.</p>
+          <div class="controls">
+            <button onclick="envAction('define')">var a = "global"</button>
+            <button onclick="envAction('enter')" class="ok">블록 진입</button>
+            <button onclick="envAction('shadow')" class="warn">var a = "block"</button>
+            <button onclick="envAction('get')">print a</button>
+            <button onclick="envAction('assign')" class="warn">a = "changed"</button>
+            <button onclick="envAction('missing')" class="danger">print missing</button>
+            <button onclick="resetEnv()" class="secondary">초기화</button>
+          </div>
+          <div class="env-wrap">
+            <div id="globalEnv" class="env active">
+              <div class="env-title"><span>전역 Environment</span><span>enclosing = null</span></div>
+              <div id="globalSlots"></div>
+            </div>
+            <div>
+              <div class="arrowline">현재 → 바깥 검색</div>
+              <div class="code">Object get(Token name) {
+  if (values.containsKey(name.lexeme)) return values.get(name.lexeme);
+  if (enclosing != null) return enclosing.get(name);
+  throw undefined;
+}</div>
+            </div>
+            <div id="blockEnv" class="env">
+              <div class="env-title"><span>블록 Environment</span><span>enclosing = global</span></div>
+              <div id="blockSlots"></div>
+            </div>
+          </div>
+        </div>
+        <div class="panel">
+          <h3>환경 로그</h3>
+          <div id="envLog" class="log"></div>
+        </div>
+      </div>
+      <div class="cards">
+        <div class="mini"><strong>선행 개념: 식별자</strong><p>토큰의 <code>lexeme</code>가 맵 키가 된다. <code>a</code>라는 철자가 이름이다.</p></div>
+        <div class="mini"><strong>선행 개념: 런타임 오류</strong><p>없는 이름을 읽거나 대입하면 파싱 오류가 아니라 실행 중 오류다.</p></div>
+        <div class="mini"><strong>트레이드오프</strong><p>환경 체인은 단순하지만 깊은 스코프에서는 매번 선형 검색한다. 이후 resolver가 보완한다.</p></div>
+        <div class="mini"><strong>연결</strong><p>함수 호출, 클로저, 클래스의 <code>this</code>도 결국 “어떤 환경을 붙잡는가”로 이어진다.</p></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>3. 블록 스코프: 같은 이름, 다른 생명주기</h2>
+      <div class="scope-demo">
+        <div class="panel">
+          <h3>문제 상황과 해결</h3>
+          <div class="code"><span class="kw">var</span> <span class="id">a</span> = <span class="str">"global"</span>;
+{
+  <span class="kw">var</span> <span class="id">a</span> = <span class="str">"block"</span>;
+  <span class="kw">print</span> <span class="id">a</span>;
+}
+<span class="kw">print</span> <span class="id">a</span>;</div>
+          <div class="controls">
+            <button onclick="scopeStep()">다음 줄 실행</button>
+            <button class="secondary" onclick="resetScope()">초기화</button>
+          </div>
+          <h3>출력</h3>
+          <div id="scopeOutput" class="output"></div>
+        </div>
+        <div class="panel">
+          <h3>스코프 스택</h3>
+          <div class="scope-stack">
+            <div id="scopeBlock" class="frame hidden">
+              <strong>블록 환경</strong>
+              <div id="scopeBlockSlots"></div>
+            </div>
+            <div id="scopeGlobal" class="frame current">
+              <strong>전역 환경</strong>
+              <div id="scopeGlobalSlots"></div>
+            </div>
+          </div>
+          <div id="scopeLog" class="log" style="margin-top: 14px;"></div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>4. 트레이드오프를 만져보기</h2>
+      <div class="trade">
+        <div class="panel">
+          <h3>스코프 깊이와 검색 비용</h3>
+          <p class="muted">8장의 환경 체인은 구현이 명확합니다. 대신 현재 스코프에 이름이 없으면 바깥으로 한 칸씩 올라가므로 깊이가 비용이 됩니다.</p>
+          <label for="depth">블록 중첩 깊이: <strong id="depthText">3</strong></label>
+          <input id="depth" type="range" min="1" max="12" value="3" oninput="updateTrade()">
+          <div class="meter"><span id="costMeter"></span></div>
+          <p id="tradeText" class="muted" style="margin-top: 12px;"></p>
+        </div>
+        <div class="panel">
+          <h3>비교 표</h3>
+          <table>
+            <thead>
+              <tr><th>선택</th><th>얻는 것</th><th>잃는 것</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>환경 체인</td><td>블록 스코프와 shadowing을 자연스럽게 표현</td><td>깊은 이름 검색은 느려질 수 있음</td></tr>
+              <tr><td>대입은 기존 슬롯만</td><td>오타로 새 변수가 생기는 일을 막음</td><td>없는 변수에 대입하면 런타임 오류</td></tr>
+              <tr><td>초기값 없는 var는 nil</td><td>선언과 초기화를 분리할 수 있음</td><td>초기화 누락을 언어가 허용</td></tr>
+              <tr><td>블록 종료 시 환경 복구</td><td>지역 변수 생명주기가 명확</td><td>인터프리터가 이전 환경을 반드시 보존해야 함</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>8장의 핵심 코드 모양</h2>
+      <div class="grid">
+        <div class="code"><span class="com">// Parser: 프로그램은 문장 목록이다.</span>
+List&lt;Stmt&gt; parse() {
+  List&lt;Stmt&gt; statements = new ArrayList&lt;&gt;();
+  while (!isAtEnd()) statements.add(declaration());
+  return statements;
+}
+
+<span class="com">// var name (= initializer)? ;</span>
+private Stmt varDeclaration() { ... }</div>
+        <div class="code"><span class="com">// Interpreter: 블록은 새 환경에서 실행한다.</span>
+public Void visitBlockStmt(Stmt.Block stmt) {
+  executeBlock(stmt.statements, new Environment(environment));
+  return null;
+}
+
+void executeBlock(List&lt;Stmt&gt; statements, Environment env) {
+  Environment previous = this.environment;
+  try {
+    this.environment = env;
+    for (Stmt statement : statements) execute(statement);
+  } finally {
+    this.environment = previous;
+  }
+}</div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    let stmtIndex = 0;
+    let envState = { inBlock: false, global: {}, block: {} };
+    let scopeIndex = 0;
+    const stmtMessages = [
+      ['Stmt.Var', 'initializer를 평가하고 environment.define("breakfast", "beignets")를 호출한다.'],
+      ['Stmt.Print', 'environment.get("breakfast")가 값을 찾아 출력한다.'],
+      ['Expr.Assign inside Stmt.Expression', '오른쪽 값을 평가하고 기존 breakfast 슬롯을 갱신한다.'],
+      ['Expr.Variable inside Stmt.Expression', '마지막 줄은 값을 만들지만 출력하지 않으므로 사용자에게 보이지 않는다.']
+    ];
+
+    function time() {
+      return new Date().toLocaleTimeString('ko-KR', { hour12: false });
+    }
+
+    function writeLog(id, html, clear) {
+      const el = document.getElementById(id);
+      if (clear) el.innerHTML = '';
+      const line = document.createElement('div');
+      line.innerHTML = '<b>' + time() + '</b> ' + html;
+      el.prepend(line);
+    }
+
+    function stmtStep() {
+      document.querySelectorAll('.ast-card').forEach(card => card.classList.remove('active'));
+      const active = document.getElementById('stmtAst' + Math.min(stmtIndex, 2));
+      if (active) active.classList.add('active');
+      const msg = stmtMessages[stmtIndex % stmtMessages.length];
+      writeLog('stmtLog', '<strong>' + msg[0] + '</strong> · ' + msg[1]);
+      stmtIndex++;
+    }
+
+    function resetStmt() {
+      stmtIndex = 0;
+      document.querySelectorAll('.ast-card').forEach(card => card.classList.remove('active'));
+      writeLog('stmtLog', '초기화: 표현식만 있던 인터프리터에 Stmt 계층을 추가할 준비가 됐다.', true);
+    }
+
+    function renderSlots(containerId, values, hotName) {
+      const container = document.getElementById(containerId);
+      container.innerHTML = '';
+      Object.keys(values).forEach(name => {
+        const slot = document.createElement('div');
+        slot.className = 'slot' + (name === hotName ? ' hot' : '');
+        slot.innerHTML = '<span>' + name + '</span><strong>' + values[name] + '</strong>';
+        container.appendChild(slot);
+      });
+      if (Object.keys(values).length === 0) {
+        const empty = document.createElement('p');
+        empty.className = 'muted';
+        empty.textContent = '아직 슬롯 없음';
+        container.appendChild(empty);
+      }
+    }
+
+    function renderEnv(hotName, miss) {
+      renderSlots('globalSlots', envState.global, hotName);
+      renderSlots('blockSlots', envState.block, hotName);
+      document.getElementById('globalEnv').className = 'env' + (!envState.inBlock ? ' active' : '') + (miss ? ' miss' : '');
+      document.getElementById('blockEnv').className = 'env' + (envState.inBlock ? ' active' : '') + (miss ? ' miss' : '');
+    }
+
+    function envAction(action) {
+      if (action === 'define') {
+        envState.global.a = '"global"';
+        writeLog('envLog', 'define: 현재 전역 환경에 <code>a</code> 슬롯을 만든다.');
+        renderEnv('a');
+      }
+      if (action === 'enter') {
+        envState.inBlock = true;
+        writeLog('envLog', 'block enter: 새 Environment(enclosing = global)를 현재 환경으로 바꾼다.');
+        renderEnv();
+      }
+      if (action === 'shadow') {
+        if (!envState.inBlock) envState.inBlock = true;
+        envState.block.a = '"block"';
+        writeLog('envLog', 'shadow: 블록 환경에도 <code>a</code>를 정의했다. 가까운 이름이 먼저 보인다.');
+        renderEnv('a');
+      }
+      if (action === 'get') {
+        if (envState.inBlock && envState.block.a) {
+          writeLog('envLog', 'get: 현재 블록에서 <code>a</code>를 찾았다. 결과는 <code>"block"</code>.');
+        } else if (envState.global.a) {
+          writeLog('envLog', 'get: 현재 환경에 없으면 enclosing으로 올라가 전역 <code>a</code>를 찾는다.');
+        } else {
+          writeLog('envLog', '<span class="err">get 실패: Undefined variable \'a\'.</span>');
+        }
+        renderEnv('a');
+      }
+      if (action === 'assign') {
+        if (envState.inBlock && envState.block.a) {
+          envState.block.a = '"changed"';
+          writeLog('envLog', 'assign: 가까운 블록 슬롯을 갱신한다. 전역 <code>a</code>는 그대로다.');
+        } else if (envState.global.a) {
+          envState.global.a = '"changed"';
+          writeLog('envLog', 'assign: 현재에서 못 찾고 전역 슬롯을 갱신했다.');
+        } else {
+          writeLog('envLog', '<span class="err">assign 실패: 없는 이름은 새로 만들지 않는다.</span>');
+        }
+        renderEnv('a');
+      }
+      if (action === 'missing') {
+        writeLog('envLog', '<span class="err">missing 검색: 현재부터 전역까지 모두 실패해서 RuntimeError.</span>');
+        renderEnv(null, true);
+      }
+    }
+
+    function resetEnv() {
+      envState = { inBlock: false, global: {}, block: {} };
+      renderEnv();
+      writeLog('envLog', '초기화: 환경은 비어 있고 현재 위치는 전역이다.', true);
+    }
+
+    function renderScope(globalVal, blockVal, showBlock) {
+      renderSlots('scopeGlobalSlots', globalVal ? { a: globalVal } : {}, 'a');
+      renderSlots('scopeBlockSlots', blockVal ? { a: blockVal } : {}, 'a');
+      document.getElementById('scopeBlock').className = 'frame' + (showBlock ? ' current' : ' hidden');
+      document.getElementById('scopeGlobal').className = 'frame' + (!showBlock ? ' current' : '');
+    }
+
+    function scopeStep() {
+      const out = document.getElementById('scopeOutput');
+      if (scopeIndex === 0) {
+        renderScope('"global"', null, false);
+        writeLog('scopeLog', '1행: 전역에 <code>a = "global"</code>을 정의한다.', true);
+      } else if (scopeIndex === 1) {
+        renderScope('"global"', null, true);
+        writeLog('scopeLog', '2행: 중괄호 진입. 새 환경을 만들고 enclosing으로 전역을 연결한다.');
+      } else if (scopeIndex === 2) {
+        renderScope('"global"', '"block"', true);
+        writeLog('scopeLog', '3행: 블록 안에 같은 이름 <code>a</code>를 새로 정의한다. 이것은 shadowing이다.');
+      } else if (scopeIndex === 3) {
+        renderScope('"global"', '"block"', true);
+        out.innerHTML += '<span class="pill">block</span>';
+        writeLog('scopeLog', '4행: print a는 가장 가까운 블록 슬롯을 읽어 <code>block</code>을 출력한다.');
+      } else if (scopeIndex === 4) {
+        renderScope('"global"', null, false);
+        writeLog('scopeLog', '5행: 블록 종료. 이전 환경으로 복구되어 블록 슬롯은 더 이상 접근할 수 없다.');
+      } else {
+        renderScope('"global"', null, false);
+        out.innerHTML += '<span class="pill">global</span>';
+        writeLog('scopeLog', '6행: 다시 print a. 이제 전역 슬롯만 보이므로 <code>global</code>을 출력한다.');
+      }
+      scopeIndex = (scopeIndex + 1) % 6;
+    }
+
+    function resetScope() {
+      scopeIndex = 0;
+      document.getElementById('scopeOutput').innerHTML = '';
+      renderScope(null, null, false);
+      writeLog('scopeLog', '초기화: 블록 스코프 예제를 첫 줄부터 실행할 수 있다.', true);
+    }
+
+    function updateTrade() {
+      const depth = Number(document.getElementById('depth').value);
+      document.getElementById('depthText').textContent = depth;
+      document.getElementById('costMeter').style.width = Math.round((depth / 12) * 100) + '%';
+      const checks = depth === 1 ? '현재 환경 1회 확인' : '최악의 경우 환경 ' + depth + '개를 차례로 확인';
+      document.getElementById('tradeText').textContent = checks + '한다. 8장의 구현은 이해하기 쉽고 정확하지만, 11장의 resolver는 이 비용을 줄이기 위해 변수 위치를 미리 계산한다.';
+    }
+
+    resetStmt();
+    resetEnv();
+    resetScope();
+    updateTrade();
+  </script>
+</body>
+</html>

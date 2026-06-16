@@ -1,0 +1,819 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Crafting Interpreters 9장: Control Flow</title>
+  <style>
+    :root {
+      --bg: #101217;
+      --panel: #1a1d25;
+      --panel-2: #222838;
+      --border: #343b4e;
+      --text: #edf1f7;
+      --muted: #a6afbf;
+      --blue: #58a6ff;
+      --green: #45d483;
+      --yellow: #f2bd57;
+      --red: #ff707d;
+      --violet: #b38cff;
+      --ink: #0b0d12;
+      --code: #141821;
+      --shadow: 0 18px 46px rgba(0, 0, 0, .28);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 10% 8%, rgba(88, 166, 255, .14), transparent 32rem),
+        radial-gradient(circle at 90% 5%, rgba(69, 212, 131, .10), transparent 28rem),
+        var(--bg);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", sans-serif;
+      line-height: 1.55;
+    }
+
+    header, main {
+      width: min(1180px, calc(100% - 32px));
+      margin: 0 auto;
+    }
+
+    header { padding: 48px 0 24px; }
+    main { padding: 16px 0 56px; }
+    h1, h2, h3, p { margin: 0; }
+
+    h1 {
+      max-width: 940px;
+      font-size: clamp(2rem, 5vw, 4.5rem);
+      line-height: 1.05;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin-bottom: 14px;
+      font-size: clamp(1.5rem, 2.6vw, 2.25rem);
+    }
+
+    h3 {
+      margin-bottom: 10px;
+      font-size: 1.04rem;
+    }
+
+    code {
+      font-family: "SF Mono", Menlo, Consolas, monospace;
+      color: #dfe7f4;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 14px;
+      padding: 7px 10px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: rgba(26, 29, 37, .78);
+      color: var(--muted);
+      font-size: .86rem;
+    }
+
+    .subtitle {
+      margin-top: 16px;
+      max-width: 800px;
+      color: var(--muted);
+      font-size: 1.08rem;
+    }
+
+    section {
+      margin-top: 22px;
+      padding: 24px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: rgba(26, 29, 37, .88);
+      box-shadow: var(--shadow);
+    }
+
+    .muted { color: var(--muted); }
+
+    .roadmap {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .road {
+      min-height: 150px;
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--panel-2);
+      position: relative;
+    }
+
+    .road::after {
+      content: "→";
+      position: absolute;
+      top: 50%;
+      right: -16px;
+      transform: translateY(-50%);
+      color: var(--yellow);
+      font-weight: 900;
+    }
+
+    .road:last-child::after { content: ""; }
+    .road strong { display: block; margin-bottom: 8px; }
+    .road span { color: var(--muted); font-size: .94rem; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.08fr) minmax(320px, .92fr);
+      gap: 18px;
+      align-items: start;
+    }
+
+    .panel {
+      padding: 18px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--panel-2);
+    }
+
+    .code {
+      padding: 16px;
+      overflow: auto;
+      border-radius: 12px;
+      border: 1px solid #2d3547;
+      background: var(--code);
+      font-family: "SF Mono", Menlo, Consolas, monospace;
+      font-size: .9rem;
+      white-space: pre;
+    }
+
+    .kw { color: #ffca77; }
+    .str { color: #8be9b3; }
+    .num { color: #8cc7ff; }
+    .id { color: #f2f5fb; }
+    .com { color: #7f899b; }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin: 16px 0;
+    }
+
+    button {
+      border: 1px solid transparent;
+      border-radius: 10px;
+      padding: 10px 13px;
+      color: var(--ink);
+      background: var(--blue);
+      font-family: inherit;
+      font-weight: 760;
+      cursor: pointer;
+      transition: transform .16s ease, filter .16s ease;
+    }
+
+    button:hover { transform: translateY(-1px); filter: brightness(1.06); }
+    button.secondary { color: var(--text); background: transparent; border-color: var(--border); }
+    button.ok { background: var(--green); }
+    button.warn { background: var(--yellow); }
+    button.danger { background: var(--red); color: #fff; }
+    button.violet { background: var(--violet); }
+
+    .log {
+      min-height: 180px;
+      max-height: 270px;
+      overflow: auto;
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: #11151d;
+      font-family: "SF Mono", Menlo, Consolas, monospace;
+      font-size: .85rem;
+      color: #dbe3ef;
+    }
+
+    .log div { margin-bottom: 8px; }
+    .log b { color: var(--green); }
+    .log .err { color: var(--red); }
+
+    .branch-board {
+      display: grid;
+      grid-template-columns: 1fr 90px 1fr;
+      gap: 10px;
+      align-items: center;
+      margin-top: 14px;
+    }
+
+    .branch {
+      min-height: 140px;
+      padding: 14px;
+      border: 1px dashed var(--border);
+      border-radius: 12px;
+      background: rgba(16, 18, 23, .55);
+      opacity: .46;
+      transition: opacity .18s ease, border-color .18s ease, background .18s ease, transform .18s ease;
+    }
+
+    .branch.hot {
+      opacity: 1;
+      transform: translateY(-2px);
+      border-color: var(--green);
+      background: rgba(69, 212, 131, .13);
+    }
+
+    .condition {
+      min-height: 90px;
+      display: grid;
+      place-items: center;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: #151a24;
+      color: var(--yellow);
+      font-weight: 850;
+      text-align: center;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .mini {
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--panel-2);
+    }
+
+    .mini strong { display: block; margin-bottom: 8px; }
+    .mini p { color: var(--muted); font-size: .92rem; }
+
+    .logic-row {
+      display: grid;
+      grid-template-columns: 1fr 90px 1fr;
+      gap: 10px;
+      align-items: center;
+      margin-top: 16px;
+    }
+
+    .eval-box {
+      min-height: 116px;
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: rgba(16, 18, 23, .58);
+      opacity: .5;
+      transition: opacity .18s ease, border-color .18s ease, background .18s ease;
+    }
+
+    .eval-box.hot {
+      opacity: 1;
+      border-color: var(--blue);
+      background: rgba(88, 166, 255, .13);
+    }
+
+    .operator {
+      display: grid;
+      place-items: center;
+      min-height: 70px;
+      border-radius: 12px;
+      background: #151923;
+      border: 1px solid var(--border);
+      font-size: 1.25rem;
+      font-weight: 900;
+      color: var(--yellow);
+    }
+
+    .loop-board {
+      display: grid;
+      grid-template-columns: 160px 1fr;
+      gap: 16px;
+      align-items: start;
+    }
+
+    .counter {
+      aspect-ratio: 1;
+      display: grid;
+      place-items: center;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: #151923;
+      font-size: clamp(2rem, 8vw, 4.8rem);
+      font-weight: 900;
+      color: var(--green);
+    }
+
+    .loop-line {
+      display: grid;
+      grid-template-columns: 28px 1fr;
+      gap: 10px;
+      align-items: start;
+      padding: 10px;
+      margin-bottom: 8px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: rgba(16, 18, 23, .46);
+      transition: border-color .18s ease, background .18s ease;
+    }
+
+    .loop-line.hot {
+      border-color: var(--yellow);
+      background: rgba(242, 189, 87, .14);
+    }
+
+    .dot {
+      width: 24px;
+      height: 24px;
+      display: grid;
+      place-items: center;
+      border-radius: 999px;
+      color: var(--ink);
+      background: var(--yellow);
+      font-weight: 900;
+      font-size: .8rem;
+    }
+
+    .desugar {
+      display: grid;
+      grid-template-columns: 1fr 60px 1fr;
+      gap: 12px;
+      align-items: stretch;
+    }
+
+    .arrow {
+      display: grid;
+      place-items: center;
+      color: var(--yellow);
+      font-size: 2rem;
+      font-weight: 900;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    th, td {
+      padding: 12px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th { background: #151923; color: var(--text); }
+    td { background: rgba(34, 40, 56, .58); color: var(--muted); }
+    tr:last-child td { border-bottom: 0; }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--yellow);
+    }
+
+    .meter {
+      height: 14px;
+      margin-top: 10px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: #11151d;
+    }
+
+    .meter span {
+      display: block;
+      width: 50%;
+      height: 100%;
+      background: linear-gradient(90deg, var(--green), var(--yellow), var(--red));
+      transition: width .16s ease;
+    }
+
+    @media (max-width: 900px) {
+      .roadmap, .grid, .cards, .loop-board, .desugar {
+        grid-template-columns: 1fr;
+      }
+
+      .road::after, .arrow { display: none; }
+      .branch-board, .logic-row { grid-template-columns: 1fr; }
+      section { padding: 18px; }
+      .counter { max-width: 180px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="badge">Crafting Interpreters · Chapter 9</div>
+    <h1>제어 흐름은 “다음에 무엇을 실행할지”를 값으로 결정한다</h1>
+    <p class="subtitle">9장은 Lox에 선택과 반복을 넣습니다. 조건문은 실행 경로를 고르고, 논리 연산자는 필요 없는 평가를 건너뛰며, 루프는 같은 문장을 조건이 거짓이 될 때까지 되풀이합니다.</p>
+  </header>
+
+  <main>
+    <section>
+      <h2>로드맵</h2>
+      <div class="roadmap">
+        <div class="road">
+          <strong>truthiness</strong>
+          <span><code>false</code>와 <code>nil</code>만 거짓이고, 나머지 값은 모두 참으로 취급한다.</span>
+        </div>
+        <div class="road">
+          <strong>if / else</strong>
+          <span>조건식을 평가해서 then 또는 else 문장 하나만 실행한다.</span>
+        </div>
+        <div class="road">
+          <strong>and / or</strong>
+          <span>왼쪽 값만으로 결과가 정해지면 오른쪽을 평가하지 않는다.</span>
+        </div>
+        <div class="road">
+          <strong>while / for</strong>
+          <span><code>while</code>은 AST 노드가 있고, <code>for</code>는 파서에서 <code>while</code>로 변환된다.</span>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>1. if/else: 문장 하나만 고르는 스위치</h2>
+      <div class="grid">
+        <div class="panel">
+          <h3>문제 재현과 해결</h3>
+          <p class="muted">8장까지는 모든 문장이 위에서 아래로 실행됩니다. 조건문은 프로그램이 런타임 값에 따라 다른 경로를 고르게 합니다.</p>
+          <div class="code"><span class="kw">if</span> (<span class="id">temperature</span> &gt; <span class="num">30</span>) {
+  <span class="kw">print</span> <span class="str">"ice coffee"</span>;
+} <span class="kw">else</span> {
+  <span class="kw">print</span> <span class="str">"hot coffee"</span>;
+}</div>
+          <div class="controls">
+            <button onclick="setTemp(34)" class="ok">temperature = 34</button>
+            <button onclick="setTemp(12)" class="warn">temperature = 12</button>
+            <button onclick="resetIf()" class="secondary">초기화</button>
+          </div>
+          <div class="branch-board">
+            <div id="thenBranch" class="branch">
+              <strong>thenBranch</strong>
+              <p class="muted">조건이 truthy면 이 문장을 실행한다.</p>
+              <div class="code"><span class="kw">print</span> <span class="str">"ice coffee"</span>;</div>
+            </div>
+            <div id="ifCondition" class="condition">조건<br>?</div>
+            <div id="elseBranch" class="branch">
+              <strong>elseBranch</strong>
+              <p class="muted">조건이 falsey이고 else가 있으면 이 문장을 실행한다.</p>
+              <div class="code"><span class="kw">print</span> <span class="str">"hot coffee"</span>;</div>
+            </div>
+          </div>
+        </div>
+        <div class="panel">
+          <h3>실행 로그</h3>
+          <div id="ifLog" class="log"></div>
+        </div>
+      </div>
+      <div class="cards">
+        <div class="mini"><strong>등장 원인</strong><p>상태가 바뀌어도 매번 같은 문장만 실행하면 프로그램은 결정표처럼 굳어 있다.</p></div>
+        <div class="mini"><strong>해결 문제</strong><p>런타임 값에 따라 실행 경로를 선택한다.</p></div>
+        <div class="mini"><strong>메커니즘</strong><p><code>visitIfStmt()</code>는 조건을 평가하고 한쪽 branch만 <code>execute()</code>한다.</p></div>
+        <div class="mini"><strong>대가</strong><p>제어 흐름이 생기면 “어떤 문장이 실행됐는가”를 추적해야 한다.</p></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>2. and/or: 값을 보존하는 단축 평가</h2>
+      <div class="grid">
+        <div class="panel">
+          <h3>오른쪽을 평가할까?</h3>
+          <p class="muted">Lox의 논리 연산자는 항상 Boolean을 반환하지 않습니다. 왼쪽 값만으로 결과가 정해지면 그 값을 그대로 반환합니다.</p>
+          <div class="controls">
+            <button onclick="logicRun('or-truthy')">"user" or fallback()</button>
+            <button onclick="logicRun('or-falsey')" class="warn">nil or fallback()</button>
+            <button onclick="logicRun('and-falsey')" class="danger">false and sideEffect()</button>
+            <button onclick="logicRun('and-truthy')" class="ok">true and sideEffect()</button>
+            <button onclick="resetLogic()" class="secondary">초기화</button>
+          </div>
+          <div class="logic-row">
+            <div id="leftEval" class="eval-box">
+              <strong>left 평가</strong>
+              <p id="leftValue" class="muted">대기 중</p>
+            </div>
+            <div id="opBox" class="operator">?</div>
+            <div id="rightEval" class="eval-box">
+              <strong>right 평가</strong>
+              <p id="rightValue" class="muted">필요할 때만 평가</p>
+            </div>
+          </div>
+        </div>
+        <div class="panel">
+          <h3>논리 로그</h3>
+          <div id="logicLog" class="log"></div>
+        </div>
+      </div>
+      <div class="cards">
+        <div class="mini"><strong>선행 개념</strong><p><code>isTruthy()</code>: <code>nil</code>과 <code>false</code>만 falsey다.</p></div>
+        <div class="mini"><strong>해결 메커니즘</strong><p><code>or</code>는 왼쪽이 truthy면 즉시 반환, <code>and</code>는 왼쪽이 falsey면 즉시 반환한다.</p></div>
+        <div class="mini"><strong>트레이드오프</strong><p>불필요한 계산과 부작용을 피하지만, 오른쪽이 실행되지 않을 수 있다는 점을 알아야 한다.</p></div>
+        <div class="mini"><strong>연결</strong><p>조건부 기본값, guard clause, lazy evaluation의 기초 패턴이다.</p></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>3. while: 조건이 참인 동안 되돌아가기</h2>
+      <div class="grid">
+        <div class="panel">
+          <h3>루프 실행 흐름</h3>
+          <div class="code"><span class="kw">var</span> <span class="id">i</span> = <span class="num">0</span>;
+<span class="kw">while</span> (<span class="id">i</span> &lt; <span class="num">3</span>) {
+  <span class="kw">print</span> <span class="id">i</span>;
+  <span class="id">i</span> = <span class="id">i</span> + <span class="num">1</span>;
+}</div>
+          <div class="controls">
+            <button onclick="loopStep()">다음 루프 단계</button>
+            <button onclick="runLoop()" class="ok">끝까지 실행</button>
+            <button onclick="resetLoop()" class="secondary">초기화</button>
+          </div>
+          <div class="loop-board">
+            <div id="counter" class="counter">0</div>
+            <div>
+              <div id="loopLine0" class="loop-line"><span class="dot">1</span><span>조건 평가: <code>i &lt; 3</code></span></div>
+              <div id="loopLine1" class="loop-line"><span class="dot">2</span><span>truthy면 body 실행: <code>print i</code></span></div>
+              <div id="loopLine2" class="loop-line"><span class="dot">3</span><span>증가: <code>i = i + 1</code></span></div>
+              <div id="loopLine3" class="loop-line"><span class="dot">4</span><span>다시 조건으로 점프</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="panel">
+          <h3>루프 로그</h3>
+          <div id="loopLog" class="log"></div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>4. for는 새 런타임 기능이 아니라 파서 설탕이다</h2>
+      <div class="grid">
+        <div class="panel">
+          <h3>desugaring 단계</h3>
+          <p class="muted"><code>for</code> 전용 인터프리터 방문자는 없습니다. 파서가 initializer, condition, increment를 조합해서 기존 <code>Block</code>과 <code>While</code> AST로 바꿉니다.</p>
+          <div class="controls">
+            <button onclick="desugarStep()">다음 변환 단계</button>
+            <button onclick="resetDesugar()" class="secondary">초기화</button>
+          </div>
+          <div class="desugar">
+            <div class="code"><span class="kw">for</span> (<span class="kw">var</span> <span class="id">i</span> = <span class="num">0</span>; <span class="id">i</span> &lt; <span class="num">3</span>; <span class="id">i</span> = <span class="id">i</span> + <span class="num">1</span>) {
+  <span class="kw">print</span> <span class="id">i</span>;
+}</div>
+            <div class="arrow">→</div>
+            <div id="desugarCode" class="code"><span class="com">// 변환 전</span>
+Stmt body = statement();</div>
+          </div>
+        </div>
+        <div class="panel">
+          <h3>변환 로그</h3>
+          <div id="desugarLog" class="log"></div>
+        </div>
+      </div>
+      <div class="cards">
+        <div class="mini"><strong>등장 원인</strong><p><code>while</code>만으로 반복은 가능하지만, 초기화/조건/증가가 흩어져 실수하기 쉽다.</p></div>
+        <div class="mini"><strong>해결 문제</strong><p><code>for</code>는 루프 제어 요소를 한 줄에 모아 읽기 쉽게 만든다.</p></div>
+        <div class="mini"><strong>메커니즘</strong><p>파서가 <code>for</code>를 <code>{ initializer; while (condition) { body; increment; } }</code> 꼴로 바꾼다.</p></div>
+        <div class="mini"><strong>대가</strong><p>문법은 편해지지만, 파서가 AST 조립 책임을 더 많이 가진다.</p></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>트레이드오프 요약</h2>
+      <div class="grid">
+        <div class="panel">
+          <h3>루프 횟수와 위험</h3>
+          <p class="muted">조건이 계속 truthy면 인터프리터는 계속 body를 실행합니다. 제어 흐름은 강력하지만 종료 조건을 프로그램이 책임져야 합니다.</p>
+          <label for="iterations">예상 반복 횟수: <strong id="iterText">5</strong></label>
+          <input id="iterations" type="range" min="1" max="30" value="5" oninput="updateTrade()">
+          <div class="meter"><span id="iterMeter"></span></div>
+          <p id="iterNote" class="muted" style="margin-top: 12px;"></p>
+        </div>
+        <div class="panel">
+          <table>
+            <thead>
+              <tr><th>기능</th><th>얻는 것</th><th>주의점</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>if</code></td><td>런타임 조건에 따른 분기</td><td>실행되지 않는 branch의 효과는 발생하지 않음</td></tr>
+              <tr><td><code>and/or</code></td><td>필요 없는 평가를 건너뜀</td><td>항상 Boolean을 반환하지 않음</td></tr>
+              <tr><td><code>while</code></td><td>조건 기반 반복</td><td>조건 갱신을 빼먹으면 무한 루프</td></tr>
+              <tr><td><code>for</code></td><td>흔한 루프 패턴을 압축</td><td>구현은 파서 desugaring에 의존</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>9장의 핵심 코드 모양</h2>
+      <div class="grid">
+        <div class="code"><span class="com">// Interpreter: if</span>
+public Void visitIfStmt(Stmt.If stmt) {
+  if (isTruthy(evaluate(stmt.condition))) {
+    execute(stmt.thenBranch);
+  } else if (stmt.elseBranch != null) {
+    execute(stmt.elseBranch);
+  }
+  return null;
+}
+
+<span class="com">// Interpreter: while</span>
+public Void visitWhileStmt(Stmt.While stmt) {
+  while (isTruthy(evaluate(stmt.condition))) {
+    execute(stmt.body);
+  }
+  return null;
+}</div>
+        <div class="code"><span class="com">// Interpreter: logical</span>
+public Object visitLogicalExpr(Expr.Logical expr) {
+  Object left = evaluate(expr.left);
+
+  if (expr.operator.type == TokenType.OR) {
+    if (isTruthy(left)) return left;
+  } else {
+    if (!isTruthy(left)) return left;
+  }
+
+  return evaluate(expr.right);
+}</div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    let loop = { i: 0, phase: 0, done: false };
+    let desugarIndex = 0;
+
+    function now() {
+      return new Date().toLocaleTimeString('ko-KR', { hour12: false });
+    }
+
+    function writeLog(id, html, clear) {
+      const el = document.getElementById(id);
+      if (clear) el.innerHTML = '';
+      const line = document.createElement('div');
+      line.innerHTML = '<b>' + now() + '</b> ' + html;
+      el.prepend(line);
+    }
+
+    function setTemp(value) {
+      const truthy = value > 30;
+      document.getElementById('thenBranch').className = 'branch' + (truthy ? ' hot' : '');
+      document.getElementById('elseBranch').className = 'branch' + (!truthy ? ' hot' : '');
+      document.getElementById('ifCondition').innerHTML = 'temperature = ' + value + '<br>' + (truthy ? 'truthy' : 'falsey');
+      writeLog('ifLog', '조건 <code>' + value + ' > 30</code> 평가 결과는 <strong>' + truthy + '</strong>. ' + (truthy ? 'thenBranch만 실행한다.' : 'elseBranch만 실행한다.'));
+    }
+
+    function resetIf() {
+      document.getElementById('thenBranch').className = 'branch';
+      document.getElementById('elseBranch').className = 'branch';
+      document.getElementById('ifCondition').innerHTML = '조건<br>?';
+      writeLog('ifLog', '초기화: 조건을 평가하기 전에는 어떤 branch도 실행되지 않았다.', true);
+    }
+
+    function resetLogic() {
+      document.getElementById('leftEval').className = 'eval-box';
+      document.getElementById('rightEval').className = 'eval-box';
+      document.getElementById('leftValue').textContent = '대기 중';
+      document.getElementById('rightValue').textContent = '필요할 때만 평가';
+      document.getElementById('opBox').textContent = '?';
+      writeLog('logicLog', '초기화: 논리 연산자는 왼쪽부터 평가한다.', true);
+    }
+
+    function logicRun(mode) {
+      const leftBox = document.getElementById('leftEval');
+      const rightBox = document.getElementById('rightEval');
+      leftBox.className = 'eval-box hot';
+      rightBox.className = 'eval-box';
+      const leftValue = document.getElementById('leftValue');
+      const rightValue = document.getElementById('rightValue');
+      const opBox = document.getElementById('opBox');
+      if (mode === 'or-truthy') {
+        opBox.textContent = 'or';
+        leftValue.textContent = 'left = "user" (truthy)';
+        rightValue.textContent = '건너뜀';
+        writeLog('logicLog', '<code>or</code>: 왼쪽이 truthy라서 오른쪽 <code>fallback()</code>을 평가하지 않고 <code>"user"</code>를 반환한다.');
+      }
+      if (mode === 'or-falsey') {
+        opBox.textContent = 'or';
+        leftValue.textContent = 'left = nil (falsey)';
+        rightValue.textContent = 'fallback() 평가됨';
+        rightBox.className = 'eval-box hot';
+        writeLog('logicLog', '<code>or</code>: 왼쪽이 falsey라서 오른쪽을 평가하고 그 값을 반환한다.');
+      }
+      if (mode === 'and-falsey') {
+        opBox.textContent = 'and';
+        leftValue.textContent = 'left = false (falsey)';
+        rightValue.textContent = '건너뜀';
+        writeLog('logicLog', '<code>and</code>: 왼쪽이 falsey라서 오른쪽 부작용을 실행하지 않고 <code>false</code>를 반환한다.');
+      }
+      if (mode === 'and-truthy') {
+        opBox.textContent = 'and';
+        leftValue.textContent = 'left = true (truthy)';
+        rightValue.textContent = 'sideEffect() 평가됨';
+        rightBox.className = 'eval-box hot';
+        writeLog('logicLog', '<code>and</code>: 왼쪽이 truthy라서 오른쪽까지 평가한다.');
+      }
+    }
+
+    function markLoopLine(index) {
+      for (let i = 0; i < 4; i++) {
+        document.getElementById('loopLine' + i).className = 'loop-line' + (i === index ? ' hot' : '');
+      }
+      document.getElementById('counter').textContent = loop.i;
+    }
+
+    function loopStep() {
+      if (loop.done) {
+        writeLog('loopLog', '이미 종료됐다. 초기화하면 다시 실행할 수 있다.');
+        return;
+      }
+      if (loop.phase === 0) {
+        markLoopLine(0);
+        if (loop.i < 3) {
+          writeLog('loopLog', '조건 <code>' + loop.i + ' < 3</code>은 truthy. body로 들어간다.');
+          loop.phase = 1;
+        } else {
+          writeLog('loopLog', '조건 <code>' + loop.i + ' < 3</code>은 falsey. while을 빠져나간다.');
+          loop.done = true;
+        }
+      } else if (loop.phase === 1) {
+        markLoopLine(1);
+        writeLog('loopLog', 'body 실행: <code>print ' + loop.i + '</code>.');
+        loop.phase = 2;
+      } else if (loop.phase === 2) {
+        markLoopLine(2);
+        loop.i++;
+        document.getElementById('counter').textContent = loop.i;
+        writeLog('loopLog', '증가식 효과: <code>i</code>가 ' + loop.i + '가 됐다.');
+        loop.phase = 3;
+      } else {
+        markLoopLine(3);
+        writeLog('loopLog', 'body 끝. 다시 조건 평가 위치로 돌아간다.');
+        loop.phase = 0;
+      }
+    }
+
+    function runLoop() {
+      let guard = 0;
+      while (!loop.done && guard < 20) {
+        loopStep();
+        guard++;
+      }
+    }
+
+    function resetLoop() {
+      loop = { i: 0, phase: 0, done: false };
+      markLoopLine(-1);
+      writeLog('loopLog', '초기화: <code>i = 0</code>. while은 조건부터 평가한다.', true);
+    }
+
+    const desugarStages = [
+      {
+        code: '<span class="com">// 1. increment는 body 뒤에 붙인다.</span>\n{\n  <span class="kw">print</span> <span class="id">i</span>;\n  <span class="id">i</span> = <span class="id">i</span> + <span class="num">1</span>;\n}',
+        msg: 'increment가 있으면 기존 body와 increment expression을 <code>Stmt.Block</code>으로 감싼다.'
+      },
+      {
+        code: '<span class="com">// 2. condition으로 while을 만든다.</span>\n<span class="kw">while</span> (<span class="id">i</span> &lt; <span class="num">3</span>) {\n  <span class="kw">print</span> <span class="id">i</span>;\n  <span class="id">i</span> = <span class="id">i</span> + <span class="num">1</span>;\n}',
+        msg: 'condition이 없으면 <code>true</code> 리터럴을 넣고, 있으면 그 조건으로 <code>Stmt.While</code>을 만든다.'
+      },
+      {
+        code: '<span class="com">// 3. initializer는 전체 while 앞에 둔다.</span>\n{\n  <span class="kw">var</span> <span class="id">i</span> = <span class="num">0</span>;\n  <span class="kw">while</span> (<span class="id">i</span> &lt; <span class="num">3</span>) {\n    <span class="kw">print</span> <span class="id">i</span>;\n    <span class="id">i</span> = <span class="id">i</span> + <span class="num">1</span>;\n  }\n}',
+        msg: 'initializer가 있으면 전체 루프를 또 하나의 <code>Stmt.Block</code>으로 감싼다. 인터프리터에는 for 전용 실행 코드가 필요 없다.'
+      }
+    ];
+
+    function desugarStep() {
+      const stage = desugarStages[desugarIndex % desugarStages.length];
+      document.getElementById('desugarCode').innerHTML = stage.code;
+      writeLog('desugarLog', stage.msg);
+      desugarIndex++;
+    }
+
+    function resetDesugar() {
+      desugarIndex = 0;
+      document.getElementById('desugarCode').innerHTML = '<span class="com">// 변환 전</span>\nStmt body = statement();';
+      writeLog('desugarLog', '초기화: 파서는 for의 세 절을 읽은 뒤 body를 먼저 파싱한다.', true);
+    }
+
+    function updateTrade() {
+      const value = Number(document.getElementById('iterations').value);
+      document.getElementById('iterText').textContent = value;
+      document.getElementById('iterMeter').style.width = Math.round(value / 30 * 100) + '%';
+      const warning = value > 22 ? '종료 조건이 불안하면 런타임이 오래 붙잡힌다.' : value > 10 ? '반복이 많아질수록 body의 비용이 그대로 누적된다.' : '작은 반복은 제어 흐름의 이점을 명확하게 보여준다.';
+      document.getElementById('iterNote').textContent = warning;
+    }
+
+    resetIf();
+    resetLogic();
+    resetLoop();
+    resetDesugar();
+    updateTrade();
+  </script>
+</body>
+</html>
