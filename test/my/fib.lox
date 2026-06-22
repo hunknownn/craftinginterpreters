@@ -1,0 +1,10 @@
+// 재귀 피보나치
+fun fib(n) {
+  if (n < 2) return n;
+  return fib(n - 1) + fib(n - 2);
+}
+
+// 0번째부터 10번째까지 출력
+for (var i = 0; i < 11; i = i + 1) {
+  print fib(i);
+}

@@ -1,0 +1,45 @@
+// 네이티브 함수
+print clock();
+
+// 변수 선언
+var a = 10;
+var b = 20;
+print a + b;
+
+// 조건문
+if (a < b) {
+  print "a is smaller";
+} else {
+  print "b is smaller";
+}
+
+// while 루프
+var i = 0;
+while (i < 3) {
+  print i;
+  i = i + 1;
+}
+
+// for 루프
+for (var j = 0; j < 3; j = j + 1) {
+  print "for: ";
+  print j;
+}
+
+// 함수 선언과 호출
+fun greet(name) {
+  print "Hi, " + name;
+}
+greet("Lox");
+
+// 매개변수 2개
+fun add(x, y) {
+  print x + y;
+}
+add(3, 4);
+
+// 매개변수 없는 함수
+fun hello() {
+  print "no params";
+}
+hello();
