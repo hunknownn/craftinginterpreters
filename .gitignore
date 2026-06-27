@@ -2,10 +2,15 @@
 .sass-cache/
 /build/
 /gen/
+/out/
 clox
 *.class
 exercises/chapter01_introduction/3/linked_list
 .idea/
+*.iml
+
+# macOS.
+.DS_Store
 
 # I keep a scratch file at the top level to try stuff out.
 temp.lox

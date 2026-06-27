@@ -7,11 +7,7 @@ import java.util.List;
 
 public class GenerateAst {
     public static void main(String[] args) throws IOException {
-        if (args.length != 1) {
-            System.err.println("Usage: generate_ast <output directory>");
-            System.exit(64);
-        }
-        String outputDir = args[0];
+        String outputDir = args.length > 0 ? args[0]  : "/Users/gimdonghun/workspace/craftinginterpreters/java/com/craftinginterpreters/my/lox";
 
         defineAst(outputDir, "Expr", Arrays.asList(
                 "Assign   : Token name, Expr value",
