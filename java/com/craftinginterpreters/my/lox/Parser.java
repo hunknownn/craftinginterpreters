@@ -333,7 +333,8 @@ class Parser {
                 if (arguments.size() >= 255) {
                     error(peek(), "Can't have more than 255 arguments.");
                 }
-                arguments.add(expression());
+                // 콤마 연산자가 인자 구분자를 삼키지 않도록 expression() 대신 assignment() 사용
+                arguments.add(assignment());
             } while (match(COMMA));
         }
 
