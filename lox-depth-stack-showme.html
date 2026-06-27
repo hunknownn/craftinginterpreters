@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>depth × Stack × Environment — Resolving & Binding</title>
+<style>
+  :root {
+    --bg: #0f1117; --panel: #1a1d27; --panel2:#141822; --border: #2a2f3d;
+    --primary: #4f9cff; --accent: #ffb454; --ok: #3ddc97; --danger: #ff6b6b;
+    --purple:#b48cff; --text: #e4e7ee; --muted: #8b93a7;
+    --mono: "SF Mono", Menlo, Monaco, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system, "Segoe UI", "Apple SD Gothic Neo", sans-serif;
+    line-height:1.6; padding:24px;
+  }
+  .wrap { max-width:1180px; margin:0 auto; }
+  header h1 { font-size:1.55rem; margin:0 0 6px; }
+  header p { color:var(--muted); margin:0 0 18px; }
+  .badge { display:inline-block; font-size:.72rem; padding:2px 8px; border-radius:20px;
+    border:1px solid var(--border); color:var(--muted); margin-right:6px; }
+
+  /* roadmap */
+  .roadmap { display:flex; flex-wrap:wrap; gap:10px; align-items:center;
+    background:var(--panel); border:1px solid var(--border); border-radius:12px;
+    padding:14px 16px; margin-bottom:20px; font-size:.86rem; }
+  .rm-node { background:var(--panel2); border:1px solid var(--border);
+    border-radius:8px; padding:6px 11px; }
+  .rm-node b { color:var(--primary); }
+  .rm-arrow { color:var(--muted); }
+
+  .phaseflag { display:flex; gap:10px; margin-bottom:14px; }
+  .pf { flex:1; text-align:center; padding:8px; border-radius:10px; border:1px solid var(--border);
+    background:var(--panel2); color:var(--muted); font-weight:600; font-size:.9rem; transition:.25s;}
+  .pf.active.resolve { border-color:var(--purple); color:var(--purple); box-shadow:0 0 0 1px var(--purple) inset;}
+  .pf.active.interpret { border-color:var(--ok); color:var(--ok); box-shadow:0 0 0 1px var(--ok) inset;}
+
+  .grid { display:grid; grid-template-columns: 320px 1fr; gap:18px; }
+  @media (max-width: 900px){ .grid{ grid-template-columns:1fr; } }
+
+  .panel { background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:16px; }
+  .panel h3 { margin:0 0 12px; font-size:.95rem; letter-spacing:.3px; }
+  .panel h3 .tag { font-size:.68rem; color:var(--muted); font-weight:400; }
+
+  /* code */
+  pre.code { font-family:var(--mono); font-size:.9rem; margin:0; background:transparent; }
+  .ln { display:flex; padding:2px 8px; border-radius:6px; white-space:pre; transition:background .2s; }
+  .ln .num { color:#4a5165; width:22px; text-align:right; margin-right:14px; user-select:none; flex:none;}
+  .ln.cur { background:rgba(79,156,255,.16); box-shadow:inset 2px 0 0 var(--primary); }
+  .ln.cur.resolve { background:rgba(180,140,255,.16); box-shadow:inset 2px 0 0 var(--purple); }
+  .ln.cur.interpret { background:rgba(61,220,151,.14); box-shadow:inset 2px 0 0 var(--ok); }
+  .kw{color:#ff9ed2;} .str{color:var(--accent);} .fn{color:#7fd1ff;} .cm{color:#5a6378;}
+
+  /* columns inside main */
+  .cols { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  @media (max-width: 720px){ .cols{ grid-template-columns:1fr; } }
+
+  .stackbox, .envbox { display:flex; flex-direction:column-reverse; gap:8px; min-height:170px;
+    justify-content:flex-start; }
+  .frame { border:1px solid var(--border); border-radius:9px; padding:8px 10px; background:var(--panel2);
+    font-family:var(--mono); font-size:.82rem; position:relative; animation:pop .28s ease; }
+  @keyframes pop { from{ transform:translateY(8px) scale(.96); opacity:0;} to{transform:none;opacity:1;} }
+  .frame .ft { font-size:.68rem; color:var(--muted); margin-bottom:3px; display:flex; justify-content:space-between;}
+  .frame.global { border-style:dashed; opacity:.92; }
+  .frame.hi { border-color:var(--accent); box-shadow:0 0 0 1px var(--accent) inset; }
+  .frame.scope { border-left:3px solid var(--purple); }
+  .frame.env { border-left:3px solid var(--ok); }
+  .var { display:inline-block; margin:2px 5px 2px 0; padding:1px 7px; border-radius:5px;
+    background:rgba(255,255,255,.05); }
+  .var .v { color:var(--accent); }
+  .var.declared { color:var(--danger); } /* false = declared not defined */
+  .var.defined  { color:var(--ok); }
+  .idx { position:absolute; right:8px; top:8px; font-size:.66rem; color:var(--muted);
+    background:rgba(255,255,255,.05); padding:1px 6px; border-radius:10px;}
+
+  .hopline { display:flex; align-items:center; gap:6px; font-family:var(--mono); font-size:.74rem;
+    color:var(--muted); margin-top:6px;}
+  .hop { color:var(--ok); font-weight:700; }
+
+  /* locals map */
+  .locals { font-family:var(--mono); font-size:.82rem; }
+  .lrow { display:flex; justify-content:space-between; padding:5px 9px; border:1px solid var(--border);
+    border-radius:7px; margin-bottom:6px; background:var(--panel2); animation:pop .28s ease;}
+  .lrow.new { border-color:var(--primary); box-shadow:0 0 0 1px var(--primary) inset; }
+  .lrow .d { color:var(--primary); font-weight:700; }
+  .empty { color:var(--muted); font-size:.8rem; font-style:italic; }
+
+  /* explain / log */
+  .explain { background:var(--panel2); border:1px solid var(--border); border-left:3px solid var(--primary);
+    border-radius:8px; padding:12px 14px; font-size:.9rem; min-height:78px; }
+  .explain .formula { font-family:var(--mono); color:var(--accent); display:block; margin-top:6px; font-size:.86rem;}
+  .out { font-family:var(--mono); font-size:.85rem; background:#0a0c12; border:1px solid var(--border);
+    border-radius:8px; padding:10px 12px; min-height:40px; color:var(--ok); white-space:pre-wrap;}
+
+  /* controls */
+  .controls { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin:18px 0; }
+  button { font:inherit; font-weight:600; cursor:pointer; border-radius:9px; padding:9px 16px;
+    border:1px solid var(--border); background:var(--panel); color:var(--text); transition:.15s; }
+  button:hover:not(:disabled){ border-color:var(--primary); color:var(--primary); }
+  button.primary { background:var(--primary); color:#0a0c12; border-color:var(--primary); }
+  button.primary:hover{ filter:brightness(1.1); color:#0a0c12;}
+  button:disabled { opacity:.4; cursor:not-allowed; }
+  .stepcount { color:var(--muted); font-size:.85rem; margin-left:auto; font-family:var(--mono);}
+
+  .tradeoff { margin-top:26px; }
+  table { width:100%; border-collapse:collapse; font-size:.86rem; margin-top:10px;}
+  th,td { border:1px solid var(--border); padding:9px 11px; text-align:left; vertical-align:top;}
+  th { background:var(--panel2); color:var(--primary); }
+  .key { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:16px;
+    margin-top:22px; font-size:.9rem;}
+  .key b { color:var(--accent); }
+  .corr { color:var(--ok); font-weight:700; }
+  footer { color:var(--muted); font-size:.8rem; margin-top:30px; text-align:center;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>depth × Stack × Environment</h1>
+    <p>리졸버의 <b>scopes 스택</b>에서 계산한 <b style="color:var(--primary)">depth(거리)</b>가,
+       인터프리터의 <b style="color:var(--ok)">환경 체인</b>에서 <code>getAt(distance)</code>로 그대로 쓰이는 과정</p>
+    <span class="badge">jlox · Chapter 11</span>
+    <span class="badge">Resolving &amp; Binding</span>
+  </header>
+
+  <div class="roadmap">
+    <span class="rm-node">파서가 만든 <b>AST</b></span>
+    <span class="rm-arrow">→</span>
+    <span class="rm-node" style="border-color:var(--purple)">① <b style="color:var(--purple)">Resolver</b> : scopes 스택으로 <b>depth 계산</b> → locals 맵에 기록</span>
+    <span class="rm-arrow">→</span>
+    <span class="rm-node" style="border-color:var(--ok)">② <b style="color:var(--ok)">Interpreter</b> : env 체인을 <b>depth칸</b> 올라가 값 획득</span>
+  </div>
+
+  <div class="phaseflag">
+    <div class="pf resolve" id="pf-r">① Resolver — 정적 분석 (값 계산 X)</div>
+    <div class="pf interpret" id="pf-i">② Interpreter — 실행 (getAt 사용)</div>
+  </div>
+
+  <div class="grid">
+    <!-- left: code + explain -->
+    <div>
+      <div class="panel">
+        <h3>Lox 소스 <span class="tag">현재 줄 강조</span></h3>
+        <pre class="code" id="code"></pre>
+      </div>
+      <div class="explain" id="explain" style="margin-top:14px;"></div>
+      <div style="margin-top:14px;">
+        <h3 style="font-size:.85rem; color:var(--muted); margin:0 0 6px;">실행 출력 (print)</h3>
+        <div class="out" id="out"></div>
+      </div>
+    </div>
+
+    <!-- right: stack / env + locals -->
+    <div class="panel">
+      <div class="cols">
+        <div>
+          <h3 style="color:var(--purple)">① scopes : Stack&lt;Map&gt;
+            <span class="tag" id="scopeNote">(글로벌은 스택에 없음)</span></h3>
+          <div class="stackbox" id="stackbox"></div>
+        </div>
+        <div>
+          <h3 style="color:var(--ok)">② environment 체인
+            <span class="tag">enclosing →</span></h3>
+          <div class="envbox" id="envbox"></div>
+        </div>
+      </div>
+      <hr style="border:none; border-top:1px solid var(--border); margin:16px 0;">
+      <h3 style="color:var(--primary)">locals : Map&lt;Expr, Integer&gt;
+        <span class="tag">변수노드 → depth</span></h3>
+      <div class="locals" id="locals"></div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button id="prev">‹ 이전</button>
+    <button id="next" class="primary">다음 ›</button>
+    <button id="auto">▶ 자동재생</button>
+    <button id="reset">↺ 처음으로</button>
+    <span class="stepcount" id="stepcount"></span>
+  </div>
+
+  <div class="key">
+    <b>핵심 대응 관계</b><br>
+    리졸버가 <code>depth = scopes.size() - 1 - i</code> 로 "변수가 <span class="corr">몇 칸 위 스코프</span>에 있는지" 세어두면,
+    실행 때 인터프리터는 그 숫자로 <code>environment.getAt(depth)</code> 를 호출해 <span class="corr">정확히 같은 칸 수만큼</span> enclosing 체인을 타고 올라갑니다.
+    <br><br>
+    즉 <b style="color:var(--purple)">리졸브 시점의 스코프 스택 모양</b> = <b style="color:var(--ok)">실행 시점의 환경 체인 모양</b> 이라는 보장이 있기 때문에,
+    한 번 센 거리를 그대로 재사용할 수 있습니다. (글로벌은 양쪽 모두 특별 취급)
+  </div>
+
+  <div class="tradeoff panel">
+    <h3>왜 이렇게 하나 — 트레이드오프</h3>
+    <table>
+      <tr><th>방식</th><th>변수 조회</th><th>장점</th><th>대가</th></tr>
+      <tr>
+        <td>리졸버 없이 (ch8 방식)</td>
+        <td>실행 때마다 이름으로 env 체인을 <b>처음부터 끝까지 탐색</b></td>
+        <td>구현 단순</td>
+        <td>매 접근마다 탐색 비용 · <b style="color:var(--danger)">클로저 변수 바인딩 버그</b></td>
+      </tr>
+      <tr>
+        <td>리졸버 + depth (ch11)</td>
+        <td>미리 센 <b>depth로 한 번에</b> 해당 env 지목</td>
+        <td>빠름 · 정적 스코프 <b style="color:var(--ok)">정확히 고정</b></td>
+        <td>AST를 한 번 더 순회하는 분석 패스 추가</td>
+      </tr>
+    </table>
+  </div>
+
+  <footer>showme · jlox Resolver/Interpreter 시뮬레이션 — 모든 단계는 책의 실제 코드 흐름을 따름</footer>
+</div>
+
+<script>
+/* ---------- 소스 코드 (토큰 단위 색칠) ---------- */
+const CODE = [
+  [['kw','var '],['t','a = '],['str','"A"'],['t',';'],['cm','   // 글로벌']],
+  [['t','{']],
+  [['kw','  var '],['t','b = '],['str','"B"'],['t',';']],
+  [['t','  {']],
+  [['kw','    var '],['t','c = '],['str','"C"'],['t',';']],
+  [['t','    print c'],['t',';'],['cm','  // 가장 안쪽']],
+  [['t','    print b'],['t',';'],['cm','  // 한 칸 위']],
+  [['t','    print a'],['t',';'],['cm','  // 글로벌']],
+  [['t','  }']],
+  [['t','}']],
+];
+
+/* ---------- 단계 정의 ----------
+ 각 step:
+  phase: 'resolve'|'interpret', line: 강조 줄(0-base, null 가능)
+  scopes: [{vars:[{name,state:'declared'|'defined'}]}]  (스택, 0=바닥)
+  locals: [{name, line, depth, isNew}]
+  env: [{name, vars:[{name,val}], global}]  (체인, 0=글로벌 바닥)
+  hi: env 강조 인덱스(getAt 결과)  / shiScope: scope 강조 인덱스
+  explain: HTML, out: 누적 출력
+*/
+const S = [];
+// 초기
+S.push({phase:'resolve', line:null, scopes:[], locals:[], env:[], explain:
+  `<b>① Resolver 패스 시작.</b> 파서가 만든 AST를 한 번 순회합니다.
+   <b>실행이 아니라 분석</b>이라 값은 계산하지 않고, 변수가 어느 스코프에 있는지만 셉니다.
+   <span class="formula">scopes = Stack&lt;Map&lt;String,Boolean&gt;&gt;  // 비어서 시작</span>`, out:''});
+
+S.push({phase:'resolve', line:0, scopes:[], locals:[], env:[], explain:
+  `<code>var a</code> — 지금 scopes가 <b>비어 있음</b>(글로벌). 리졸버는 글로벌 변수를 스택에 넣지 않습니다.
+   <span class="formula">if (scopes.isEmpty()) return;  // declare/define 건너뜀</span>`, out:''});
+
+S.push({phase:'resolve', line:1, scopes:[{vars:[]}], shiScope:0, locals:[], env:[], explain:
+  `<code>{</code> 블록 진입 → <b>beginScope()</b> : 빈 Map을 스택에 <b>push</b>.
+   <span class="formula">scopes.push(new HashMap())  // size = 1</span>`, out:''});
+
+S.push({phase:'resolve', line:2, scopes:[{vars:[{name:'b',state:'defined'}]}], shiScope:0, locals:[], env:[], explain:
+  `<code>var b = "B"</code> → declare(b)로 <span style="color:var(--danger)">b:false</span> 넣고,
+   초기화식 resolve 후 define(b)로 <span style="color:var(--ok)">b:true</span>.
+   <span class="formula">scope.put("b", true)</span>`, out:''});
+
+S.push({phase:'resolve', line:3, scopes:[{vars:[{name:'b',state:'defined'}]},{vars:[]}], shiScope:1, locals:[], env:[], explain:
+  `안쪽 <code>{</code> → 다시 <b>beginScope()</b>. 스택이 2층이 됨.
+   <span class="formula">scopes.size() == 2  // [s0, s1]</span>`, out:''});
+
+S.push({phase:'resolve', line:4,
+  scopes:[{vars:[{name:'b',state:'defined'}]},{vars:[{name:'c',state:'defined'}]}], shiScope:1,
+  locals:[], env:[], explain:
+  `<code>var c = "C"</code> → 맨 위 스코프(s1, index 1)에 c 등록.
+   <span class="formula">scopes.peek().put("c", true)</span>`, out:''});
+
+S.push({phase:'resolve', line:5,
+  scopes:[{vars:[{name:'b',state:'defined'}]},{vars:[{name:'c',state:'defined'},{name:'c',hi:true,state:'defined'}]}],
+  shiScope:1,
+  locals:[{name:'c', line:6, depth:0, isNew:true}], env:[], explain:
+  `<code>print c</code> → 변수 참조! <b>resolveLocal</b>이 스택을 <b>위에서부터</b> 훑습니다.
+   i=1(s1)에서 c 발견 →
+   <span class="formula">depth = scopes.size()-1-i = 2-1-<b>1</b> = <b style="color:var(--primary)">0</b></span>
+   <code>interpreter.resolve(c표현식, 0)</code> → locals에 <b>{c → 0}</b> 저장.`, out:''});
+
+S.push({phase:'resolve', line:6,
+  scopes:[{vars:[{name:'b',hi:true,state:'defined'}]},{vars:[{name:'c',state:'defined'}]}], shiScope:0,
+  locals:[{name:'c', line:6, depth:0},{name:'b', line:7, depth:1, isNew:true}], env:[], explain:
+  `<code>print b</code> → resolveLocal: i=1(s1)에 b 없음 → i=0(s0)에서 b 발견.
+   <span class="formula">depth = 2-1-<b>0</b> = <b style="color:var(--primary)">1</b></span>
+   locals에 <b>{b → 1}</b> 추가. (한 칸 바깥 스코프)`, out:''});
+
+S.push({phase:'resolve', line:7,
+  scopes:[{vars:[{name:'b',state:'defined'}]},{vars:[{name:'c',state:'defined'}]}], shiScope:null,
+  locals:[{name:'c', line:6, depth:0},{name:'b', line:7, depth:1}], env:[], explain:
+  `<code>print a</code> → resolveLocal: 어느 스코프에서도 a를 <b>못 찾음</b>.
+   → <b>locals에 아무것도 넣지 않음</b>. 실행 때 글로벌로 처리될 것.
+   <span class="formula">루프가 끝나도 못 찾으면 그냥 return (글로벌로 간주)</span>`, out:''});
+
+S.push({phase:'resolve', line:8,
+  scopes:[{vars:[{name:'b',state:'defined'}]}], shiScope:0,
+  locals:[{name:'c', line:6, depth:0},{name:'b', line:7, depth:1}], env:[], explain:
+  `안쪽 <code>}</code> → <b>endScope()</b> : 스택 <b>pop</b>. s1 제거.
+   <span class="formula">scopes.pop()  // size = 1</span>`, out:''});
+
+S.push({phase:'resolve', line:9,
+  scopes:[], shiScope:null,
+  locals:[{name:'c', line:6, depth:0},{name:'b', line:7, depth:1}], env:[], explain:
+  `바깥 <code>}</code> → endScope() 한 번 더. 스택이 다시 비었습니다.
+   <b>① Resolver 패스 끝!</b> 결과물은 오른쪽 <span style="color:var(--primary)">locals 맵</span> 하나뿐 —
+   "각 변수 노드가 몇 칸 위에 있는지" 표.`, out:''});
+
+/* ---------- Interpreter 단계 ---------- */
+const L = [{name:'c', line:6, depth:0},{name:'b', line:7, depth:1}]; // 고정 locals
+S.push({phase:'interpret', line:null, scopes:null, locals:L,
+  env:[{name:'global', vars:[], global:true}], explain:
+  `<b>② Interpreter 실행 시작.</b> 이제 진짜로 트리를 실행합니다.
+   환경(Environment)은 글로벌 하나로 시작하고, 블록을 만날 때마다 enclosing을 가리키는 새 환경이 쌓입니다.`, out:''});
+
+S.push({phase:'interpret', line:0, locals:L,
+  env:[{name:'global', vars:[{name:'a',val:'"A"'}], global:true}], explain:
+  `<code>var a = "A"</code> → 글로벌 환경에 a 정의.`, out:''});
+
+S.push({phase:'interpret', line:1, locals:L,
+  env:[{name:'global', vars:[{name:'a',val:'"A"'}], global:true},{name:'block1', vars:[]}], explain:
+  `<code>{</code> → <b>new Environment(enclosing = 글로벌)</b>. 체인: block1 → global.
+   <span class="formula">리졸버의 첫 beginScope()와 정확히 대응</span>`, out:''});
+
+S.push({phase:'interpret', line:2, locals:L,
+  env:[{name:'global', vars:[{name:'a',val:'"A"'}], global:true},{name:'block1', vars:[{name:'b',val:'"B"'}]}], explain:
+  `<code>var b = "B"</code> → block1 환경에 b 정의.`, out:''});
+
+S.push({phase:'interpret', line:3, locals:L,
+  env:[{name:'global', vars:[{name:'a',val:'"A"'}], global:true},{name:'block1', vars:[{name:'b',val:'"B"'}]},{name:'block2', vars:[]}], explain:
+  `안쪽 <code>{</code> → 또 new Environment(enclosing = block1). 체인 3층: block2 → block1 → global.
+   <span class="formula">리졸브 때 scopes가 2층이던 그 모양 그대로</span>`, out:''});
+
+S.push({phase:'interpret', line:4, locals:L,
+  env:[{name:'global', vars:[{name:'a',val:'"A"'}], global:true},{name:'block1', vars:[{name:'b',val:'"B"'}]},{name:'block2', vars:[{name:'c',val:'"C"'}]}], explain:
+  `<code>var c = "C"</code> → block2 환경에 c 정의.`, out:''});
+
+S.push({phase:'interpret', line:5, locals:L, hi:2, hop:0,
+  env:[{name:'global', vars:[{name:'a',val:'"A"'}], global:true},{name:'block1', vars:[{name:'b',val:'"B"'}]},{name:'block2', vars:[{name:'c',val:'"C"',hi:true}]}], explain:
+  `<code>print c</code> → lookUpVariable: <code>locals.get(c) = <b style="color:var(--primary)">0</b></code>.
+   <span class="formula">environment.getAt(<b>0</b>) → 현재 환경(block2) 그대로 → "C"</span>
+   0칸 = 안 올라감. 바로 여기.`, out:'C'});
+
+S.push({phase:'interpret', line:6, locals:L, hi:1, hop:1,
+  env:[{name:'global', vars:[{name:'a',val:'"A"'}], global:true},{name:'block1', vars:[{name:'b',val:'"B"',hi:true}]},{name:'block2', vars:[{name:'c',val:'"C"'}]}], explain:
+  `<code>print b</code> → <code>locals.get(b) = <b style="color:var(--primary)">1</b></code>.
+   <span class="formula">getAt(<b>1</b>) → enclosing 1번 따라감: block2 → block1 → "B"</span>
+   리졸버가 센 "1칸 위"가 여기서 정확히 1 hop으로 실현됩니다.`, out:'C\nB'});
+
+S.push({phase:'interpret', line:7, locals:L, hi:0, hop:'g',
+  env:[{name:'global', vars:[{name:'a',val:'"A"',hi:true}], global:true},{name:'block1', vars:[{name:'b',val:'"B"'}]},{name:'block2', vars:[{name:'c',val:'"C"'}]}], explain:
+  `<code>print a</code> → <code>locals.get(a) = <b style="color:var(--danger)">null</b></code> (리졸버가 안 넣었음).
+   <span class="formula">distance == null → globals.get("a") → "A"</span>
+   depth가 없는 변수는 환경 체인을 안 타고 곧장 글로벌에서 찾습니다.`, out:'C\nB\nA'});
+
+S.push({phase:'interpret', line:8, locals:L,
+  env:[{name:'global', vars:[{name:'a',val:'"A"'}], global:true},{name:'block1', vars:[{name:'b',val:'"B"'}]}], explain:
+  `안쪽 <code>}</code> → block2 환경 버림(체인에서 빠짐). 리졸버의 endScope()와 대응.`, out:'C\nB\nA'});
+
+S.push({phase:'interpret', line:9, locals:L,
+  env:[{name:'global', vars:[{name:'a',val:'"A"'}], global:true}], explain:
+  `바깥 <code>}</code> → block1도 버림. 글로벌만 남고 실행 종료.
+   <b>depth로 매번 정확한 환경을 한 방에 찾았습니다.</b> 이름 기반 전체 탐색 없이.`, out:'C\nB\nA'});
+
+/* ---------- 렌더링 ---------- */
+let cur = 0, timer = null;
+const $ = id => document.getElementById(id);
+
+function renderCode(line, phase){
+  $('code').innerHTML = CODE.map((toks,i)=>{
+    const cls = (i===line) ? `ln cur ${phase}` : 'ln';
+    const inner = toks.map(([c,t])=>`<span class="${c}">${t}</span>`).join('');
+    return `<div class="${cls}"><span class="num">${i+1}</span>${inner}</div>`;
+  }).join('');
+}
+
+function renderStack(scopes, shiScope){
+  const box = $('stackbox');
+  if(scopes===null){ box.innerHTML = '<div class="empty">— 실행 단계에서는 안 씀 —</div>'; return; }
+  if(scopes.length===0){ box.innerHTML = '<div class="empty">(스택 비어 있음 = 글로벌 영역)</div>'; return; }
+  box.innerHTML = scopes.map((s,i)=>{
+    const hi = (i===shiScope) ? ' hi' : '';
+    const vars = s.vars.length
+      ? s.vars.map(v=>`<span class="var ${v.state} ${v.hi?'':''}" style="${v.hi?'outline:1px solid var(--accent);':''}">${v.name}<span style="color:var(--muted)">:</span>${v.state==='defined'?'<span style="color:var(--ok)">T</span>':'<span style="color:var(--danger)">F</span>'}</span>`).join('')
+      : '<span style="color:var(--muted)">∅</span>';
+    return `<div class="frame scope${hi}"><div class="ft"><span>scope s${i}</span><span>i=${i}</span></div>${vars}</div>`;
+  }).join('');
+}
+
+function renderEnv(env, hi, hop){
+  const box = $('envbox');
+  if(!env || env.length===0){ box.innerHTML = '<div class="empty">— 리졸브 단계에서는 안 씀 —</div>'; return; }
+  box.innerHTML = env.map((e,i)=>{
+    const cls = (i===hi)?' hi':'';
+    const g = e.global?' global':' env';
+    const vars = e.vars.length
+      ? e.vars.map(v=>`<span class="var" style="${v.hi?'outline:1px solid var(--accent);background:rgba(255,180,84,.12);':''}">${v.name} = <span class="v">${v.val}</span></span>`).join('')
+      : '<span style="color:var(--muted)">∅</span>';
+    // hop 표시: getAt 기준 위에서부터 거리
+    let badge = '';
+    if(hop!=null){
+      const topIdx = env.length-1;
+      if(hop==='g'){ badge = e.global?'<span class="idx" style="color:var(--accent)">getAt 안 씀 → globals</span>':''; }
+      else { const dist = topIdx - i; if(dist===hop && dist>=0) badge = `<span class="idx" style="color:var(--ok)">getAt 도착 (${hop}칸↑)</span>`; }
+    }
+    return `<div class="frame${g}${cls}"><div class="ft"><span>${e.name}</span><span>${e.global?'(globals)':'enclosing↑'}</span></div>${vars}${badge}</div>`;
+  }).join('');
+}
+
+function renderLocals(locals){
+  const box = $('locals');
+  if(!locals || locals.length===0){ box.innerHTML = '<div class="empty">(아직 비어 있음)</div>'; return; }
+  box.innerHTML = locals.map(l=>
+    `<div class="lrow ${l.isNew?'new':''}"><span>Expr.Variable("${l.name}") <span style="color:var(--muted)">@line ${l.line}</span></span><span class="d">depth ${l.depth}</span></div>`
+  ).join('');
+}
+
+function render(){
+  const s = S[cur];
+  renderCode(s.line, s.phase);
+  renderStack(s.scopes===undefined?null:s.scopes, s.shiScope);
+  renderEnv(s.env, s.hi, s.hop);
+  renderLocals(s.locals);
+  $('explain').innerHTML = s.explain;
+  $('out').textContent = s.out || '';
+  $('pf-r').classList.toggle('active', s.phase==='resolve');
+  $('pf-i').classList.toggle('active', s.phase==='interpret');
+  $('stepcount').textContent = `${cur+1} / ${S.length}`;
+  $('prev').disabled = cur===0;
+  $('next').disabled = cur===S.length-1;
+}
+
+$('next').onclick = ()=>{ if(cur<S.length-1){cur++;render();} };
+$('prev').onclick = ()=>{ if(cur>0){cur--;render();} };
+$('reset').onclick = ()=>{ stopAuto(); cur=0; render(); };
+function stopAuto(){ if(timer){clearInterval(timer);timer=null;$('auto').textContent='▶ 자동재생';} }
+$('auto').onclick = ()=>{
+  if(timer){ stopAuto(); return; }
+  $('auto').textContent='⏸ 정지';
+  timer = setInterval(()=>{ if(cur<S.length-1){cur++;render();} else stopAuto(); }, 1700);
+};
+render();
+</script>
+</body>
+</html>

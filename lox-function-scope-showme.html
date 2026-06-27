@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lox Environment 다이어그램 — 박스 & 참조</title>
+<style>
+:root{
+  --bg:#0f1117; --panel:#1a1d27; --panel2:#222633; --border:#2a2f3d;
+  --primary:#4f9cff; --accent:#ffb454; --ok:#3ddc97; --danger:#ff6b6b;
+  --purple:#b48cff; --text:#e4e7ee; --muted:#8b93a7;
+}
+*{box-sizing:border-box;}
+body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,"Segoe UI","Apple SD Gothic Neo",sans-serif;line-height:1.55;padding:28px 16px;}
+.wrap{max-width:980px;margin:0 auto;}
+h1{font-size:24px;margin:0 0 4px;}
+.sub{color:var(--muted);margin:0 0 22px;font-size:14.5px;}
+code,.mono{font-family:"SF Mono",Menlo,monospace;}
+.kw{color:var(--purple);}.str{color:var(--ok);}.fn{color:var(--accent);}.cm{color:var(--muted);}
+
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px;}
+button{background:var(--primary);color:#06223f;border:none;border-radius:9px;padding:10px 16px;font-size:14px;font-weight:700;cursor:pointer;transition:.15s;}
+button:hover{filter:brightness(1.1);}
+button.ghost{background:transparent;color:var(--text);border:1px solid var(--border);font-weight:600;}
+button.seg{background:var(--panel2);color:var(--muted);border:1px solid var(--border);font-weight:600;}
+button.seg.active{background:var(--primary);color:#06223f;border-color:var(--primary);}
+button:disabled{opacity:.4;cursor:not-allowed;}
+.spacer{flex:1;}
+.stepbadge{font-size:13px;color:var(--muted);font-family:"SF Mono",Menlo,monospace;}
+
+.codeline{background:#0c0e14;border:1px solid var(--border);border-radius:10px;padding:12px 14px;font-family:"SF Mono",Menlo,monospace;font-size:13.5px;white-space:pre;overflow-x:auto;margin-bottom:14px;}
+.codeline .hl{background:rgba(79,156,255,.18);border-radius:3px;outline:1px solid rgba(79,156,255,.4);}
+
+/* ===== HEAP CANVAS ===== */
+.heap{position:relative;display:flex;flex-direction:column;align-items:center;gap:54px;padding:30px 10px 24px;background:var(--panel);border:1px solid var(--border);border-radius:14px;min-height:420px;}
+svg#wires{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible;z-index:1;}
+
+.envbox{width:250px;background:var(--panel2);border:2px solid var(--border);border-radius:12px;z-index:2;
+  opacity:0;transform:translateY(-10px) scale(.96);transition:opacity .4s,transform .4s,box-shadow .3s,border-color .3s;}
+.envbox.show{opacity:1;transform:none;}
+.envbox.global{border-color:#46506a;}
+.envbox.call{border-color:var(--primary);}
+.envbox.block{border-color:var(--accent);}
+.envbox.flash{box-shadow:0 0 0 4px rgba(79,156,255,.3);}
+.envbox.fade{opacity:.28;}
+.env-head{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);font-size:13px;font-weight:700;}
+.env-head .addr{color:var(--muted);font-family:"SF Mono",Menlo,monospace;font-weight:500;font-size:11px;}
+.env-body{padding:8px 12px 10px;}
+.env-encl{font-size:11px;color:var(--primary);font-family:"SF Mono",Menlo,monospace;margin-bottom:6px;}
+.env-encl.nil{color:var(--muted);}
+.maplabel{font-size:11px;color:var(--muted);margin:2px 0 5px;text-transform:uppercase;letter-spacing:.4px;}
+.kv{display:flex;gap:6px;align-items:center;font-family:"SF Mono",Menlo,monospace;font-size:13px;padding:5px 8px;border-radius:6px;background:#0c0e14;border:1px solid var(--border);margin:4px 0;}
+.kv .k{color:var(--accent);min-width:18px;}
+.kv .ar{color:var(--muted);}
+.kv .v{color:var(--ok);}
+.kv.empty{color:var(--muted);font-style:italic;border-style:dashed;background:transparent;}
+.kv.pop{animation:pop .6s;}
+.kv.over{border-color:var(--danger);}
+.kv.add{border-color:var(--ok);}
+@keyframes pop{0%{transform:scale(1);}35%{transform:scale(1.08);background:#1d2330;}100%{transform:scale(1);}}
+
+.caption{min-height:42px;background:#0c0e14;border:1px dashed var(--border);border-radius:10px;padding:10px 14px;margin-top:14px;font-size:14px;}
+.caption b{color:var(--accent);}
+.caption .ok{color:var(--ok);} .caption .bad{color:var(--danger);} .caption .blue{color:var(--primary);}
+
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12.5px;color:var(--muted);margin-top:10px;}
+.legend span{display:flex;align-items:center;gap:6px;}
+.dot{width:12px;height:12px;border-radius:3px;display:inline-block;}
+
+.takeaway{margin-top:22px;border-left:3px solid var(--accent);background:rgba(255,180,84,.07);padding:12px 16px;border-radius:0 8px 8px 0;font-size:14px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Lox Environment — 박스 &amp; 참조 다이어그램</h1>
+  <p class="sub">환경(Environment)이 <b>네모 박스</b>로 생기고, <code class="mono">enclosing</code> 참조가 <b style="color:var(--primary)">화살표</b>로 연결되는 과정을 직접 그려서 보여줍니다.</p>
+
+  <div class="toolbar">
+    <button class="seg active" id="segFn" onclick="setScenario('fn')">함수 본문 직접</button>
+    <button class="seg" id="segBlk" onclick="setScenario('blk')">중첩 블록</button>
+    <span class="spacer"></span>
+    <button id="nextBtn" onclick="next()">▶ 다음 단계</button>
+    <button class="ghost" onclick="resetSim()">↺ 리셋</button>
+    <span class="stepbadge" id="stepBadge">0 / 4</span>
+  </div>
+
+  <div class="codeline" id="codeBox"></div>
+
+  <div class="heap" id="heap">
+    <svg id="wires">
+      <defs>
+        <marker id="ah" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+          <path d="M0,0 L8,3 L0,6 Z" fill="#4f9cff"></path>
+        </marker>
+      </defs>
+    </svg>
+
+    <div class="envbox global" id="boxGlobal">
+      <div class="env-head"><span>global</span><span class="addr">@0x01</span></div>
+      <div class="env-body">
+        <div class="env-encl nil">enclosing = null</div>
+        <div class="maplabel">values (HashMap)</div>
+        <div class="kv"><span class="k">scope</span><span class="ar">→</span><span class="v">&lt;fn&gt;</span></div>
+      </div>
+    </div>
+
+    <div class="envbox call" id="boxCall">
+      <div class="env-head"><span>call env</span><span class="addr">@0x02</span></div>
+      <div class="env-body">
+        <div class="env-encl" id="callEncl">enclosing = @0x01</div>
+        <div class="maplabel">values (HashMap)</div>
+        <div id="callMap"><div class="kv empty">(empty)</div></div>
+      </div>
+    </div>
+
+    <div class="envbox block" id="boxBlock">
+      <div class="env-head"><span>block env</span><span class="addr">@0x03</span></div>
+      <div class="env-body">
+        <div class="env-encl">enclosing = @0x02</div>
+        <div class="maplabel">values (HashMap)</div>
+        <div id="blockMap"><div class="kv empty">(empty)</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <span><i class="dot" style="background:#46506a"></i>global</span>
+    <span><i class="dot" style="background:var(--primary)"></i>call env (함수 호출)</span>
+    <span><i class="dot" style="background:var(--accent)"></i>block env (중첩 블록)</span>
+    <span style="color:var(--primary)">→ = enclosing 참조</span>
+  </div>
+
+  <div class="caption" id="caption">시나리오를 고르고 <b>▶ 다음 단계</b>를 눌러보세요.</div>
+
+  <div class="takeaway" id="takeaway"></div>
+</div>
+
+<script>
+const heap = document.getElementById('heap');
+const svg = document.getElementById('wires');
+const boxGlobal = document.getElementById('boxGlobal');
+const boxCall = document.getElementById('boxCall');
+const boxBlock = document.getElementById('boxBlock');
+const callMap = document.getElementById('callMap');
+const blockMap = document.getElementById('blockMap');
+const caption = document.getElementById('caption');
+const stepBadge = document.getElementById('stepBadge');
+const nextBtn = document.getElementById('nextBtn');
+const codeBox = document.getElementById('codeBox');
+const takeaway = document.getElementById('takeaway');
+
+let scenario = 'fn';
+let step = 0;
+// 어떤 박스를 보일지 / 어떤 화살표를 그릴지 상태
+let arrows = []; // [{from:el, to:el}]
+
+const CODE = {
+  fn: [
+    '<span class="kw">fun</span> <span class="fn">scope</span>(a) {',
+    '  <span class="kw">var</span> a = <span class="str">"local"</span>;',
+    '}',
+    '<span class="fn">scope</span>(<span class="str">"param"</span>);'
+  ],
+  blk: [
+    '<span class="kw">fun</span> <span class="fn">scope</span>(a) {',
+    '  {',
+    '    <span class="kw">var</span> a = <span class="str">"local"</span>;',
+    '  }',
+    '}',
+    '<span class="fn">scope</span>(<span class="str">"param"</span>);'
+  ]
+};
+
+const TAKE = {
+  fn: '<b>함수 본문 직접</b>: 호출이 환경을 <span class="blue">딱 1겹</span>(call env)만 만들고, 파라미터와 <code>var a</code>가 <b>같은 박스의 같은 맵</b>에 들어간다 → 같은 키라 <span class="bad">덮어쓰기</span>. 그래서 ch10에선 에러 없이 <span class="ok">유효</span>.',
+  blk: '<b>중첩 블록</b>: 블록 진입 시 <span style="color:var(--accent)">자식 환경(block env)</span>이 한 겹 더 생겨 <code>var a</code>가 <b>다른 박스</b>에 들어간다 → <span class="ok">섀도잉</span>. 두 <code>a</code>가 공존하고, 블록을 벗어나면 자식 박스는 폐기된다.'
+};
+
+// 각 시나리오의 단계 정의
+const STEPS = {
+  fn: [
+    { code:[3], show:['global'], caption:'전역에서 <b>scope("param")</b> 호출 직전. 지금은 global 환경만 존재.',
+      apply(){ resetMaps(); showBoxes(['global']); arrows=[]; } },
+    { code:[0,3], show:['global','call'], caption:'호출! <span class="blue">call env(@0x02)</span> 박스가 새로 생기고 <code>enclosing</code> 화살표가 global을 가리킨다.',
+      apply(){ showBoxes(['global','call']); flash(boxCall); arrows=[{from:boxCall,to:boxGlobal}]; } },
+    { code:[0], show:['global','call'], caption:'파라미터 바인딩: <code>define("a","param")</code> → call env의 맵에 <span class="ok">a</span> 추가.',
+      apply(){ setMap(callMap,[['a','"param"','add']]); } },
+    { code:[1], show:['global','call'], caption:'본문 <code>var a</code> 실행. 본문은 <b>새 박스를 안 만든다</b> — 같은 call env에서 <code>define("a","local")</code> → 같은 키를 <span class="bad">덮어쓰기</span>.',
+      apply(){ setMap(callMap,[['a','"local"','over']]); } },
+  ],
+  blk: [
+    { code:[5], show:['global'], caption:'전역에서 <b>scope("param")</b> 호출 직전.',
+      apply(){ resetMaps(); showBoxes(['global']); arrows=[]; } },
+    { code:[0,5], show:['global','call'], caption:'호출 → <span class="blue">call env</span> 생성, <code>a→"param"</code> 바인딩. 화살표는 global을 가리킨다.',
+      apply(){ showBoxes(['global','call']); flash(boxCall); arrows=[{from:boxCall,to:boxGlobal}]; setMap(callMap,[['a','"param"','add']]); } },
+    { code:[1], show:['global','call','block'], caption:'중첩 블록 진입! <code>new Environment(callEnv)</code> → <span style="color:var(--accent)">block env(@0x03)</span> 박스가 또 생기고, enclosing이 call env를 가리킨다.',
+      apply(){ showBoxes(['global','call','block']); flash(boxBlock); arrows=[{from:boxCall,to:boxGlobal},{from:boxBlock,to:boxCall}]; setMap(blockMap,[]); } },
+    { code:[2], show:['global','call','block'], caption:'<code>var a</code> → <b>block env</b>에 새 <span class="ok">a</span> 추가. call env의 a("param")는 <b>그대로 살아있다</b> → <span class="ok">섀도잉</span>(두 박스에 a 공존).',
+      apply(){ setMap(blockMap,[['a','"local"','add']]); } },
+  ]
+};
+
+function showBoxes(list){
+  boxGlobal.classList.toggle('show', list.includes('global'));
+  boxCall.style.display = list.includes('call') ? '' : 'none';
+  boxBlock.style.display = list.includes('block') ? '' : 'none';
+  if(list.includes('call')) boxCall.classList.add('show');
+  if(list.includes('block')) boxBlock.classList.add('show');
+}
+function flash(el){ el.classList.add('flash'); setTimeout(()=>el.classList.remove('flash'),650); }
+function resetMaps(){
+  callMap.innerHTML = '<div class="kv empty">(empty)</div>';
+  blockMap.innerHTML = '<div class="kv empty">(empty)</div>';
+}
+function setMap(target, rows){
+  if(rows.length===0){ target.innerHTML='<div class="kv empty">(empty)</div>'; return; }
+  target.innerHTML = rows.map(([k,v,cls])=>
+    `<div class="kv pop ${cls}"><span class="k">${k}</span><span class="ar">→</span><span class="v">${v}</span></div>`).join('');
+}
+
+function renderCode(activeLines){
+  codeBox.innerHTML = CODE[scenario].map((ln,i)=>
+    activeLines.includes(i) ? `<span class="hl">${ln}</span>` : ln).join('\n');
+}
+
+/* ===== 화살표(참조) 그리기 ===== */
+function drawArrows(){
+  // 기존 path 제거 (defs는 유지)
+  [...svg.querySelectorAll('path.wire')].forEach(p=>p.remove());
+  const c = heap.getBoundingClientRect();
+  arrows.forEach(({from,to})=>{
+    if(from.style.display==='none' || to.style.display==='none') return;
+    const f = from.getBoundingClientRect();
+    const t = to.getBoundingClientRect();
+    // child(아래) 윗변 중앙 → parent(위) 아랫변 중앙
+    const x1 = f.left + f.width*0.5 - c.left;
+    const y1 = f.top - c.top;
+    const x2 = t.left + t.width*0.5 - c.left;
+    const y2 = t.bottom - c.top;
+    const midY = (y1+y2)/2;
+    const d = `M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`;
+    const path = document.createElementNS('http://www.w3.org/2000/svg','path');
+    path.setAttribute('class','wire');
+    path.setAttribute('d',d);
+    path.setAttribute('fill','none');
+    path.setAttribute('stroke','#4f9cff');
+    path.setAttribute('stroke-width','2');
+    path.setAttribute('marker-end','url(#ah)');
+    svg.appendChild(path);
+    // 그리기 애니메이션
+    const len = path.getTotalLength();
+    path.style.strokeDasharray = len;
+    path.style.strokeDashoffset = len;
+    path.getBoundingClientRect();
+    path.style.transition = 'stroke-dashoffset .5s ease';
+    path.style.strokeDashoffset = 0;
+    // 라벨
+    const label = document.createElementNS('http://www.w3.org/2000/svg','text');
+    label.setAttribute('class','wire');
+    label.setAttribute('x', (x1+x2)/2 + 8);
+    label.setAttribute('y', midY - 2);
+    label.setAttribute('fill','#4f9cff');
+    label.setAttribute('font-size','11');
+    label.setAttribute('font-family','SF Mono, Menlo, monospace');
+    label.textContent = 'enclosing';
+    svg.appendChild(label);
+  });
+}
+
+function applyStep(){
+  const s = STEPS[scenario][step];
+  s.apply();
+  renderCode(s.code);
+  caption.innerHTML = s.caption;
+  stepBadge.textContent = `${step+1} / ${STEPS[scenario].length}`;
+  // 레이아웃 반영 후 화살표 그리기
+  requestAnimationFrame(()=>requestAnimationFrame(drawArrows));
+}
+
+function next(){
+  const max = STEPS[scenario].length;
+  if(step >= max-1) return;
+  step++;
+  applyStep();
+  if(step >= max-1){ nextBtn.textContent='✓ 완료'; nextBtn.disabled=true; }
+}
+
+function resetSim(){
+  step = 0;
+  nextBtn.textContent='▶ 다음 단계';
+  nextBtn.disabled=false;
+  // 초기 상태
+  boxGlobal.classList.add('show');
+  boxCall.style.display='none'; boxBlock.style.display='none';
+  boxCall.classList.remove('show'); boxBlock.classList.remove('show');
+  resetMaps(); arrows=[]; drawArrows();
+  renderCode([]);
+  caption.innerHTML = '시나리오를 고르고 <b>▶ 다음 단계</b>를 눌러보세요.';
+  stepBadge.textContent = `0 / ${STEPS[scenario].length}`;
+}
+
+function setScenario(s){
+  scenario = s;
+  document.getElementById('segFn').classList.toggle('active', s==='fn');
+  document.getElementById('segBlk').classList.toggle('active', s==='blk');
+  takeaway.innerHTML = TAKE[s];
+  resetSim();
+}
+
+window.addEventListener('resize', drawArrows);
+setScenario('fn');
+</script>
+</body>
+</html>
