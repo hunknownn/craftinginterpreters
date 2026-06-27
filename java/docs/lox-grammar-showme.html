@@ -126,6 +126,8 @@
   .step-controls { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:14px 0; }
   .step-controls .btn { padding:7px 12px; }
   .step-counter { font-family:var(--mono); font-size:13px; color:var(--muted); min-width:70px; text-align:center; }
+  #stepSpeed { background:var(--panel2); color:var(--text); border:1px solid var(--border);
+    border-radius:9px; padding:8px 10px; font-size:13px; font-family:var(--mono); cursor:pointer; }
   .step-grid { display:grid; grid-template-columns: 200px 1fr; gap:16px; margin-top:14px; }
   @media (max-width:820px){ .step-grid{ grid-template-columns:1fr; } }
   .tokstrip { display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
@@ -304,6 +306,12 @@ primary     → <code class="s">"true"</code> | <code class="s">"false"</code> |
         <button class="btn" id="stepNext">다음 ▶</button>
         <button class="btn ghost" id="stepLast">⏭</button>
         <button class="btn ghost" id="stepAuto">⏯ 자동재생</button>
+        <select id="stepSpeed" title="자동재생 속도">
+          <option value="1100">0.5×</option>
+          <option value="650" selected>1×</option>
+          <option value="320">2×</option>
+          <option value="150">4×</option>
+        </select>
         <span style="width:1px; height:22px; background:var(--border); margin:0 4px"></span>
         <button class="btn ghost" id="expandBtn">펼치기</button>
         <button class="btn ghost" id="collapseBtn">접기</button>
@@ -1116,12 +1124,17 @@ function renderStep(){
 function go(d){ if(!STEP)return; stepIdx=Math.max(0,Math.min(STEP.steps.length-1,stepIdx+d)); renderStep(); }
 function goTo(i){ if(!STEP)return; stepIdx=Math.max(0,Math.min(STEP.steps.length-1,i)); renderStep(); }
 function stopAuto(){ if(autoTimer){ clearInterval(autoTimer); autoTimer=null; $('stepAuto').textContent='⏯ 자동재생'; } }
+function startAuto(){
+  if(autoTimer) clearInterval(autoTimer);
+  const ms=parseInt($('stepSpeed').value,10)||650;
+  autoTimer=setInterval(()=>{ if(stepIdx>=STEP.steps.length-1){ stopAuto(); return; } go(1); }, ms);
+}
 function toggleAuto(){
   if(autoTimer){ stopAuto(); return; }
   if(!STEP) run();
-  goTo(0);
+  if(stepIdx>=STEP.steps.length-1) goTo(0); // 끝에 있으면 처음부터
   $('stepAuto').textContent='⏸ 정지';
-  autoTimer=setInterval(()=>{ if(stepIdx>=STEP.steps.length-1){ stopAuto(); return; } go(1); }, 650);
+  startAuto();
 }
 
 /* ---- floating grammar panel ---- */
@@ -1160,6 +1173,7 @@ $('stepPrev').onclick=()=>{ stopAuto(); go(-1); };
 $('stepNext').onclick=()=>{ stopAuto(); go(1); };
 $('stepLast').onclick=()=>{ stopAuto(); goTo(1e9); };
 $('stepAuto').onclick=toggleAuto;
+$('stepSpeed').onchange=()=>{ if(autoTimer) startAuto(); }; // 재생 중이면 새 속도로 즉시 반영
 $('src').addEventListener('keydown',e=>{ if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){ e.preventDefault(); run(); } });
 
 $('src').value=SAMPLES['연산자 우선순위'].code;
