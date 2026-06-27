@@ -1,0 +1,1170 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lox 문법 시각화 (11장까지)</title>
+<style>
+  :root {
+    --bg: #0f1117; --panel: #1a1d27; --panel2:#141821; --border: #2a2f3d;
+    --primary: #4f9cff; --accent: #ffb454; --ok: #3ddc97; --danger: #ff6b6b;
+    --purple:#b18cff; --text: #e4e7ee; --muted: #8b93a7;
+    --mono: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, "Segoe UI", "Apple SD Gothic Neo", sans-serif;
+    line-height: 1.65; padding-bottom: 80px;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px; }
+  header.hero {
+    padding: 48px 20px 32px; text-align: center;
+    border-bottom: 1px solid var(--border);
+    background: radial-gradient(900px 300px at 50% -40%, rgba(79,156,255,.18), transparent);
+  }
+  header.hero h1 { margin: 0 0 8px; font-size: 30px; }
+  header.hero p { margin: 0; color: var(--muted); font-size: 15px; }
+  .tag { display:inline-block; font-size:12px; color:var(--accent); border:1px solid var(--border);
+    border-radius: 999px; padding: 3px 12px; margin-bottom:16px; background:var(--panel); }
+  section { margin: 44px 0; }
+  h2 { font-size: 22px; margin: 0 0 6px; }
+  h2 .num { color: var(--primary); font-variant-numeric: tabular-nums; margin-right: 8px; }
+  .sub { color: var(--muted); margin: 0 0 20px; font-size: 14px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 20px; }
+  .grid { display: grid; gap: 16px; }
+  .mono { font-family: var(--mono); }
+  code.k { color: var(--purple); }
+  code.s { color: var(--accent); }
+  code.n { color: var(--ok); }
+
+  /* roadmap */
+  .roadmap { display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:center; }
+  .rm-node { background:var(--panel2); border:1px solid var(--border); border-radius:10px;
+    padding:10px 14px; font-size:13px; text-align:center; min-width:120px; }
+  .rm-node b { display:block; color:var(--primary); }
+  .rm-node small { color:var(--muted); }
+  .rm-arrow { color:var(--muted); font-size:18px; }
+
+  /* precedence ladder */
+  .ladder { display:flex; flex-direction:column; gap:6px; }
+  .rung { display:grid; grid-template-columns: 140px 1fr; gap:14px; align-items:center;
+    background:var(--panel2); border:1px solid var(--border); border-radius:10px;
+    padding:10px 14px; cursor:pointer; transition: all .15s; }
+  .rung:hover { border-color: var(--primary); transform: translateX(4px); }
+  .rung.active { border-color: var(--primary); background: rgba(79,156,255,.12); }
+  .rung .name { font-family:var(--mono); font-weight:600; color:var(--primary); }
+  .rung .ops { font-family:var(--mono); color:var(--text); font-size:12.5px; overflow-x:auto; white-space:nowrap; }
+  .rung .ops .prod-arrow { color:var(--muted); margin-right:4px; }
+  .rung .ops .none { color:var(--muted); }
+  .lad-info { margin-top:14px; min-height:48px; padding:14px; border-radius:10px;
+    background:var(--panel2); border:1px dashed var(--border); font-size:14px; }
+  .lad-info b { color:var(--accent); }
+  .prec-hint { font-size:12px; color:var(--muted); margin-top:8px; }
+  .prec-hint .lo { color:var(--ok); } .prec-hint .hi { color:var(--danger); }
+
+  /* playground */
+  .pg-top { display:grid; grid-template-columns: 1fr 1fr; gap:16px; }
+  @media (max-width: 820px){ .pg-top{ grid-template-columns:1fr; } .rung{grid-template-columns:110px 1fr;} }
+  textarea { width:100%; height:180px; resize:vertical; background:var(--panel2);
+    color:var(--text); border:1px solid var(--border); border-radius:10px; padding:12px;
+    font-family:var(--mono); font-size:13px; line-height:1.6; }
+  .btn { background:var(--primary); color:#07101f; border:none; border-radius:9px;
+    padding:9px 16px; font-weight:600; cursor:pointer; font-size:13px; }
+  .btn:hover { filter:brightness(1.08); }
+  .btn.ghost { background:var(--panel2); color:var(--text); border:1px solid var(--border); }
+  .samples { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0; }
+  .samples .btn { font-size:12px; padding:6px 12px; }
+  .toolbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:6px; }
+
+  .panes { display:grid; grid-template-columns: 220px 1fr; gap:16px; margin-top:16px; }
+  @media (max-width: 820px){ .panes{ grid-template-columns:1fr; } }
+  .pane-title { font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin-bottom:8px; }
+  .tokens { display:flex; flex-direction:column; gap:4px; max-height:520px; overflow:auto; }
+  .tok { display:flex; justify-content:space-between; gap:8px; font-family:var(--mono); font-size:12px;
+    background:var(--panel2); border:1px solid var(--border); border-radius:7px; padding:5px 9px; }
+  .tok .tt { color:var(--primary); }
+  .tok .tl { color:var(--text); }
+
+  /* AST tree */
+  .tree { max-height:520px; overflow:auto; padding:4px; }
+  .node { margin-left: 0; }
+  .node .body { margin-left: 16px; border-left: 1px dashed var(--border); padding-left: 14px; }
+  .nhead { display:inline-flex; align-items:center; gap:8px; padding:3px 0; cursor:default; }
+  .badge { font-family:var(--mono); font-size:11px; font-weight:700; padding:2px 8px; border-radius:6px; }
+  .b-stmt { background: rgba(79,156,255,.16); color:#9cc6ff; border:1px solid rgba(79,156,255,.35); }
+  .b-expr { background: rgba(177,140,255,.16); color:#cdb6ff; border:1px solid rgba(177,140,255,.35); }
+  .b-leaf { background: rgba(61,220,151,.14); color:#7df0c0; border:1px solid rgba(61,220,151,.35); }
+  .b-op   { background: rgba(255,180,84,.16); color:#ffd08a; border:1px solid rgba(255,180,84,.35); }
+  .field { color:var(--muted); font-size:12px; font-family:var(--mono); margin-right:4px; }
+  .val { color:var(--accent); font-family:var(--mono); font-size:13px; }
+  .toggle { cursor:pointer; color:var(--muted); width:14px; display:inline-block; user-select:none; }
+  .err { color:var(--danger); font-family:var(--mono); font-size:13px; padding:10px;
+    background:rgba(255,107,107,.08); border:1px solid rgba(255,107,107,.3); border-radius:8px; }
+  .note-desugar { margin-top:10px; font-size:13px; color:var(--muted); }
+  .note-desugar b{ color:var(--accent); }
+
+  /* generic concept blocks */
+  .why { border-left:3px solid var(--accent); padding-left:14px; margin: 14px 0; }
+  .why h4 { margin:0 0 4px; font-size:14px; color:var(--accent); }
+  .why p { margin:0; font-size:14px; color:var(--text); }
+  table { width:100%; border-collapse:collapse; font-size:13px; margin-top:8px; }
+  th,td { border:1px solid var(--border); padding:9px 12px; text-align:left; }
+  th { background:var(--panel2); color:var(--muted); font-weight:600; }
+  .pill { font-size:11px; padding:1px 7px; border-radius:5px; }
+  .p-ok{ background:rgba(61,220,151,.16); color:var(--ok); }
+  .p-no{ background:rgba(255,107,107,.16); color:var(--danger); }
+
+  /* desugar demo */
+  .ds { display:grid; grid-template-columns:1fr auto 1fr; gap:14px; align-items:center; }
+  @media (max-width:820px){ .ds{ grid-template-columns:1fr; } }
+  .ds pre { background:var(--panel2); border:1px solid var(--border); border-radius:10px;
+    padding:14px; font-family:var(--mono); font-size:12.5px; overflow:auto; margin:0; line-height:1.7; }
+  .ds .arrow { font-size:26px; color:var(--accent); text-align:center; }
+  .hl { background:rgba(255,180,84,.22); border-radius:4px; padding:0 3px; }
+  /* step-through parser */
+  .step-controls { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:14px 0; }
+  .step-controls .btn { padding:7px 12px; }
+  .step-counter { font-family:var(--mono); font-size:13px; color:var(--muted); min-width:70px; text-align:center; }
+  .step-grid { display:grid; grid-template-columns: 200px 1fr; gap:16px; margin-top:14px; }
+  @media (max-width:820px){ .step-grid{ grid-template-columns:1fr; } }
+  .tokstrip { display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
+  .tk { font-family:var(--mono); font-size:12px; padding:5px 9px; border-radius:7px;
+        border:1px solid var(--border); background:var(--panel2); color:var(--muted); transition: all .12s; }
+  .tk.done { color:var(--text); border-color:#3a4254; }
+  .tk.cur { background:rgba(79,156,255,.22); border-color:var(--primary); color:#fff;
+            box-shadow:0 0 0 2px rgba(79,156,255,.25); }
+  .stackbox { display:flex; flex-direction:column-reverse; gap:4px; }
+  .stackframe { font-family:var(--mono); font-size:12px; padding:6px 10px; border-radius:7px;
+                background:var(--panel2); border:1px solid var(--border); color:var(--muted); }
+  .stackframe.top { border-color:var(--accent); color:var(--accent); background:rgba(255,180,84,.1); }
+  .forest { display:flex; gap:16px; flex-wrap:wrap; align-items:flex-start; min-height:60px; }
+  .forest > .node { background:var(--panel2); border:1px solid var(--border); border-radius:10px;
+                    padding:10px 12px; transition: all .15s; }
+  .forest > .node.fresh { border-color:var(--ok); box-shadow:0 0 0 2px rgba(61,220,151,.3); }
+  .step-msg { margin-top:14px; }
+  .step-in { background:var(--panel2); color:var(--text); border:1px solid var(--border);
+             border-radius:9px; padding:9px 12px; font-family:var(--mono); font-size:13px; flex:1; min-width:160px; }
+  footer { text-align:center; color:var(--muted); font-size:13px; padding:30px 20px 0; border-top:1px solid var(--border); }
+
+  /* floating grammar panel */
+  body { transition: margin-right .25s ease; }
+  #grammarFab { position:fixed; right:18px; bottom:18px; z-index:60; box-shadow:0 6px 18px rgba(0,0,0,.4); }
+  #grammarPanel { position:fixed; top:0; right:0; height:100vh; width:430px; max-width:92vw;
+    background:var(--panel); border-left:1px solid var(--border); box-shadow:-10px 0 34px rgba(0,0,0,.45);
+    transform:translateX(102%); transition:transform .25s ease; z-index:59; display:flex; flex-direction:column; }
+  #grammarPanel.open { transform:translateX(0); }
+  #grammarPanel .gp-head { display:flex; justify-content:space-between; align-items:center;
+    padding:14px 16px; border-bottom:1px solid var(--border); flex:0 0 auto; }
+  #grammarPanel .gp-head b { font-size:15px; }
+  #grammarPanel .gp-body { overflow:auto; padding:16px; }
+  #grammarPanel .gp-title { font-size:12px; text-transform:uppercase; letter-spacing:.06em;
+    color:var(--accent); margin:14px 0 6px; }
+  #grammarPanel .gp-title:first-child { margin-top:0; }
+  #grammarPanel .gp-body .mono { background:var(--panel2); border:1px solid var(--border);
+    border-radius:10px; padding:14px; margin:0; font-size:12px; white-space:pre; overflow:auto; line-height:1.7; }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="tag">Crafting Interpreters · jlox · ~11장 (책 표준)</div>
+  <h1>Lox 문법을 눈으로 보고 직접 파싱해보기</h1>
+  <p>재귀 하향 파서가 토큰을 어떻게 우선순위에 따라 트리로 엮는지 — 코드를 입력해 확인하세요.</p>
+</header>
+
+<div class="wrap">
+
+  <!-- ROADMAP -->
+  <section>
+    <h2><span class="num">0</span>전체 지도</h2>
+    <p class="sub">소스 텍스트가 실행되기까지 — 11장까지 우리가 만든 파이프라인</p>
+    <div class="card">
+      <div class="roadmap">
+        <div class="rm-node"><b>문자열</b><small>source</small></div>
+        <span class="rm-arrow">→</span>
+        <div class="rm-node"><b>Scanner</b><small>어휘 문법</small></div>
+        <span class="rm-arrow">→</span>
+        <div class="rm-node"><b>Token[]</b><small>단어들</small></div>
+        <span class="rm-arrow">→</span>
+        <div class="rm-node"><b>Parser</b><small>구문 문법</small></div>
+        <span class="rm-arrow">→</span>
+        <div class="rm-node"><b>AST</b><small>Stmt/Expr 트리</small></div>
+        <span class="rm-arrow">→</span>
+        <div class="rm-node"><b>Resolver</b><small>11장: 변수 바인딩</small></div>
+        <span class="rm-arrow">→</span>
+        <div class="rm-node"><b>Interpreter</b><small>tree-walk 실행</small></div>
+      </div>
+      <div class="why">
+        <h4>11장은 문법을 바꾸지 않는다</h4>
+        <p>11장(Resolving and Binding)은 새 구문을 추가하지 않는다. AST를 한 번 더 훑어
+        각 변수 참조가 <em>몇 단계 바깥 스코프</em>의 어떤 변수인지 미리 계산해 둘 뿐이다.
+        그래서 <b>문법 형상은 10장(함수)까지와 동일</b>하다. 클래스/상속은 12~13장.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- WHY recursive descent -->
+  <section>
+    <h2><span class="num">1</span>왜 규칙을 함수로 쪼개는가 — 우선순위의 문제</h2>
+    <p class="sub">평평한 규칙 하나로는 <code class="mono">1 + 2 * 3</code>의 의미를 정할 수 없다</p>
+    <div class="card">
+      <div class="why">
+        <h4>등장 배경</h4>
+        <p>표현식을 <code class="mono">expr → expr op expr</code> 한 줄로만 쓰면
+        <code class="mono">1 + 2 * 3</code>이 <code class="mono">(1+2)*3</code>인지
+        <code class="mono">1+(2*3)</code>인지 문법이 결정하지 못한다(모호함). 또 좌재귀라
+        재귀 하향 파서가 무한 루프에 빠진다.</p>
+      </div>
+      <div class="why">
+        <h4>해결 — 우선순위마다 규칙(=함수) 한 층</h4>
+        <p>연산자 우선순위 단계 수만큼 규칙을 계층으로 쌓는다. 각 규칙은 <b>자기보다
+        한 단계 더 강하게 묶이는 규칙</b>을 자식으로 호출한다. 낮은 우선순위가 트리의
+        위쪽(나중에 계산), 높은 우선순위가 아래쪽(먼저 계산)에 온다.</p>
+      </div>
+
+      <p class="sub" style="margin:18px 0 8px">구문 문법 (Statements) — 문장의 큰 구조. 표현식 규칙은 아래 우선순위 사다리에 생성 규칙과 함께 나온다.</p>
+      <div class="mono grammar-src" data-gtitle="구문 문법 (Statements)" style="font-size:12.5px; white-space:pre; overflow:auto; line-height:1.7; background:var(--panel2); border:1px solid var(--border); border-radius:10px; padding:16px">
+<span style="color:#8b93a7">// 구문 문법 (Statements)</span>
+program     → declaration* EOF ;
+declaration → funDecl | varDecl | statement ;
+funDecl     → <code class="s">"fun"</code> function ;
+function    → IDENTIFIER <code class="s">"("</code> parameters? <code class="s">")"</code> block ;
+parameters  → IDENTIFIER ( <code class="s">","</code> IDENTIFIER )* ;
+varDecl     → <code class="s">"var"</code> IDENTIFIER ( <code class="s">"="</code> expression )? <code class="s">";"</code> ;
+statement   → exprStmt | forStmt | ifStmt | printStmt
+            | returnStmt | whileStmt | block ;
+exprStmt    → expression <code class="s">";"</code> ;
+forStmt     → <code class="s">"for"</code> <code class="s">"("</code> ( varDecl | exprStmt | <code class="s">";"</code> )
+                    expression? <code class="s">";"</code> expression? <code class="s">")"</code> statement ;
+ifStmt      → <code class="s">"if"</code> <code class="s">"("</code> expression <code class="s">")"</code> statement ( <code class="s">"else"</code> statement )? ;
+printStmt   → <code class="s">"print"</code> expression <code class="s">";"</code> ;
+returnStmt  → <code class="s">"return"</code> expression? <code class="s">";"</code> ;
+whileStmt   → <code class="s">"while"</code> <code class="s">"("</code> expression <code class="s">")"</code> statement ;
+block       → <code class="s">"{"</code> declaration* <code class="s">"}"</code> ;
+      </div>
+
+      <p class="sub" style="margin:22px 0 8px">표현식 문법 (우선순위 낮음 → 높음) — 위에서 아래로 점점 강하게 묶인다.</p>
+      <div class="mono grammar-src" data-gtitle="표현식 문법 (우선순위 낮음 → 높음)" style="font-size:12.5px; white-space:pre; overflow:auto; line-height:1.7; background:var(--panel2); border:1px solid var(--border); border-radius:10px; padding:16px">
+<span style="color:#8b93a7">// 표현식 문법 (우선순위 낮음 → 높음)</span>
+expression  → assignment ;
+assignment  → IDENTIFIER <code class="s">"="</code> assignment | logic_or ;
+logic_or    → logic_and ( <code class="s">"or"</code> logic_and )* ;
+logic_and   → equality ( <code class="s">"and"</code> equality )* ;
+equality    → comparison ( ( <code class="s">"!="</code> | <code class="s">"=="</code> ) comparison )* ;
+comparison  → term ( ( <code class="s">"&gt;"</code> | <code class="s">"&gt;="</code> | <code class="s">"&lt;"</code> | <code class="s">"&lt;="</code> ) term )* ;
+term        → factor ( ( <code class="s">"-"</code> | <code class="s">"+"</code> ) factor )* ;
+factor      → unary ( ( <code class="s">"/"</code> | <code class="s">"*"</code> ) unary )* ;
+unary       → ( <code class="s">"!"</code> | <code class="s">"-"</code> ) unary | call ;
+call        → primary ( <code class="s">"("</code> arguments? <code class="s">")"</code> )* ;
+arguments   → expression ( <code class="s">","</code> expression )* ;
+primary     → <code class="s">"true"</code> | <code class="s">"false"</code> | <code class="s">"nil"</code>
+            | NUMBER | STRING | IDENTIFIER | <code class="s">"("</code> expression <code class="s">")"</code> ;
+      </div>
+
+      <p class="sub" style="margin:22px 0 8px">↓ 같은 규칙을 <b>클릭</b>해보세요 — 역할과 다음에 호출하는 규칙을 보여줍니다.</p>
+      <div class="ladder" id="ladder"></div>
+      <div class="lad-info" id="ladInfo">규칙을 클릭하면 설명이 여기에 표시됩니다.</div>
+      <div class="prec-hint">위로 갈수록 <span class="lo">우선순위 낮음(느슨하게 묶임 · 트리 위쪽)</span>,
+        아래로 갈수록 <span class="hi">우선순위 높음(강하게 묶임 · 트리 아래쪽)</span>.</div>
+    </div>
+  </section>
+
+  <!-- PLAYGROUND -->
+  <section>
+    <h2><span class="num">2</span>실습: 직접 파싱하기</h2>
+    <p class="sub">실제 동작하는 재귀 하향 파서(책 11장 문법)가 입력을 토큰화하고 AST로 만듭니다</p>
+
+    <div class="card" style="margin-bottom:16px">
+      <h4 style="margin:0 0 10px; color:var(--accent); font-size:14px">트리를 읽는 3가지 원칙</h4>
+      <table>
+        <tr><th style="width:160px">원칙</th><th>의미</th></tr>
+        <tr><td><b>① 깊이 = 우선순위</b></td><td>강하게 묶이는 연산자일수록 <b>더 아래(깊은 곳)</b>에 놓인다. 깊은 노드가 먼저 계산되므로 곧 우선순위다. <code class="mono">*</code>가 <code class="mono">+</code>보다 아래.</td></tr>
+        <tr><td><b>② 루트 = 마지막 계산</b></td><td>트리의 <b>꼭대기 노드가 가장 나중에</b> 실행된다. <code class="mono">1+2*3</code>의 루트가 <code class="mono">+</code>인 이유 — 덧셈이 마지막.</td></tr>
+        <tr><td><b>③ 기울기 = 결합 방향</b></td><td>왼쪽 결합은 <code class="mono">while</code> 루프로 파싱돼 <b>왼쪽으로 깊어지고</b>, 할당처럼 오른쪽 결합은 재귀 호출로 <b>오른쪽으로 깊어진다</b>.</td></tr>
+      </table>
+      <p class="prec-hint" style="margin-top:10px">파서는 <code class="mono">expression → assignment → … → primary</code> 순서로 <b>약한 규칙부터</b> 내려가며 호출한다.
+      가장 약한 규칙이 먼저 호출돼 트리 위쪽을 차지하고, 가장 강한 <code class="mono">primary</code>가 맨 안쪽 잎이 된다.</p>
+    </div>
+
+    <div class="card">
+      <p class="sub" style="margin:0 0 10px">파서는 토큰을 <b>왼쪽→오른쪽으로 순차적으로</b> 읽는다.
+        <b>다음 ▶</b> 으로 한 단계씩 진행하며 ① 토큰 커서 ② 호출 스택 ③ 자라나는 트리를 함께 보고,
+        <b>파싱 ▶ 끝까지</b> 로 단숨에 최종 AST까지 갈 수 있다.</p>
+
+      <div class="samples" id="samples"></div>
+      <textarea id="src" spellcheck="false"></textarea>
+
+      <div class="toolbar" style="margin-top:10px">
+        <button class="btn" id="parseBtn">파싱 ▶ 끝까지</button>
+        <span style="width:1px; height:22px; background:var(--border); margin:0 4px"></span>
+        <button class="btn ghost" id="stepFirst">⏮</button>
+        <button class="btn ghost" id="stepPrev">◀ 이전</button>
+        <span class="step-counter" id="stepCounter">0 / 0</span>
+        <button class="btn" id="stepNext">다음 ▶</button>
+        <button class="btn ghost" id="stepLast">⏭</button>
+        <button class="btn ghost" id="stepAuto">⏯ 자동재생</button>
+        <span style="width:1px; height:22px; background:var(--border); margin:0 4px"></span>
+        <button class="btn ghost" id="expandBtn">펼치기</button>
+        <button class="btn ghost" id="collapseBtn">접기</button>
+      </div>
+
+      <div class="pane-title" style="margin-top:14px">토큰 (<span style="color:var(--primary)">파랑 = 지금 읽는 위치</span>)</div>
+      <div class="tokstrip" id="stepTokens"></div>
+
+      <div class="step-grid">
+        <div>
+          <div class="pane-title">호출 스택 (아래일수록 깊음)</div>
+          <div class="stackbox" id="stepStack"></div>
+        </div>
+        <div>
+          <div class="pane-title">AST · 완성된 서브트리 (<span style="color:#3ddc97">초록 = 방금 생성</span>)</div>
+          <div class="forest" id="stepForest"></div>
+        </div>
+      </div>
+
+      <div class="lad-info step-msg" id="stepMsg">샘플을 고르거나 코드를 입력한 뒤 <b>파싱 ▶</b> / <b>다음 ▶</b> 을 누르세요.</div>
+      <div class="lad-info" id="astWhy" style="margin-top:12px">샘플을 고르면 <b>왜 이런 트리가 나오는지</b> 해설이 여기에 표시됩니다.</div>
+
+      <div class="why" style="margin:14px 0 0">
+        <h4>"완성된 서브트리"가 자라는 원리</h4>
+        <p>재귀 하향 파서는 <b>잎(primary)부터 만들어 위로 합친다(bottom-up).</b> 막 만들어진 노드가
+        잠시 떠 있다가, 상위 규칙이 이항 노드를 만들 때 <b>자식으로 빨려 들어가</b> 하나로 합쳐진다.
+        마지막 단계에서 노드가 <b>하나(Program)</b>만 남으면 그게 곧 최종 AST다.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ASSIGNMENT lvalue -->
+  <section>
+    <h2><span class="num">3</span>할당이 까다로운 이유 — l-value</h2>
+    <p class="sub"><code class="mono">a = 1</code> 과 <code class="mono">a + b = 1</code> 의 차이</p>
+    <div class="card">
+      <div class="why">
+        <h4>문제</h4>
+        <p><code class="mono">=</code>의 <b>왼쪽</b>은 "값을 저장할 장소"(l-value)여야 한다.
+        하지만 파서는 <code class="mono">a</code>를 읽는 순간엔 그게 할당 대상인지 그냥 값인지 모른다.
+        한 글자 앞을 더 봐야(<code class="mono">=</code>가 오나?) 알 수 있다.</p>
+      </div>
+      <div class="why">
+        <h4>해결 — 일단 표현식으로 파싱하고, 끝나면 대상으로 "변환"</h4>
+        <p><code class="mono">assignment</code> 규칙은 먼저 한 단계 위(<code class="mono">logic_or</code>)를
+        평범하게 파싱한다. 그 뒤 <code class="mono">=</code>가 보이면, 방금 파싱한 결과가
+        <code class="mono">Expr.Variable</code>인지 확인한다. 맞으면 <code class="mono">Expr.Assign</code>으로
+        바꾸고, 아니면 "잘못된 할당 대상" 에러를 낸다. 우변은 <b>다시 assignment</b>를 호출해
+        <code class="mono">a = b = 1</code> 같은 <b>오른쪽 결합</b>을 자연스럽게 처리한다.</p>
+      </div>
+      <p class="prec-hint">실습창에 <code class="mono">a + b = 1;</code> 을 넣어 에러를, <code class="mono">a = b = 1;</code> 을 넣어 우결합 트리를 확인해 보세요.</p>
+    </div>
+  </section>
+
+  <!-- DESUGAR for -->
+  <section>
+    <h2><span class="num">4</span><code class="mono">for</code>는 사실 문법에 없다 — 디슈가링</h2>
+    <p class="sub">파서가 <code class="mono">for</code>를 <code class="mono">while</code> 블록으로 "번역"한다</p>
+    <div class="card">
+      <div class="why">
+        <h4>아이디어</h4>
+        <p><code class="mono">for</code>는 <code class="mono">while</code>로 표현할 수 있는 편의 문법(syntactic sugar)이다.
+        인터프리터에 <code class="mono">For</code> 노드를 따로 만들지 않고, 파서가 파싱 단계에서
+        초기화·조건·증감을 분해해 <b>이미 존재하는</b> <code class="mono">Block</code>·<code class="mono">While</code> 노드로 조립한다.</p>
+      </div>
+      <div class="ds">
+        <pre>for (var i = 0; i &lt; 3; i = i + 1)
+  print i;</pre>
+        <div class="arrow">⇒</div>
+        <pre>{
+  <span class="hl">var i = 0;</span>           <span style="color:#8b93a7">// 초기화 → 바깥 블록</span>
+  while (<span class="hl">i &lt; 3</span>) {       <span style="color:#8b93a7">// 조건 → while</span>
+    {
+      print i;
+      <span class="hl">i = i + 1;</span>       <span style="color:#8b93a7">// 증감 → 본문 끝</span>
+    }
+  }
+}</pre>
+      </div>
+      <p class="note-desugar"><b>확인:</b> 실습창의 <b>for 예제</b>를 파싱하면 AST에 <code class="mono">For</code>가 아니라
+        <code class="mono">Block → While → Block</code> 구조가 나오는 걸 볼 수 있습니다. 이게 디슈가링의 증거입니다.</p>
+    </div>
+  </section>
+
+  <!-- GRAMMAR reference -->
+  <section>
+    <h2><span class="num">5</span>어휘 문법 (Terminals)</h2>
+    <p class="sub">스캐너가 문자들을 토큰으로 묶는 규칙 — 구문·표현식 문법은 위 1번 참고</p>
+    <div class="grid" style="grid-template-columns:1fr;">
+      <div class="card mono grammar-src" data-gtitle="어휘 문법 (Terminals)" style="font-size:13px; white-space:pre; overflow:auto; line-height:1.7">
+<span style="color:#8b93a7">// 어휘 문법 (Terminals)</span>
+NUMBER      → DIGIT+ ( <code class="s">"."</code> DIGIT+ )? ;
+STRING      → <code class="s">'"'</code> &lt;any char except <code class="s">'"'</code>&gt;* <code class="s">'"'</code> ;
+IDENTIFIER  → ALPHA ( ALPHA | DIGIT )* ;
+ALPHA       → <code class="s">"a"</code>...<code class="s">"z"</code> | <code class="s">"A"</code>...<code class="s">"Z"</code> | <code class="s">"_"</code> ;
+DIGIT       → <code class="s">"0"</code>...<code class="s">"9"</code> ;
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    재귀 하향 파서 · 단일 HTML · 의존성 0 — Crafting Interpreters(Bob Nystrom) jlox 11장 기준
+  </footer>
+</div>
+
+<!-- floating grammar reference -->
+<button class="btn" id="grammarFab">📖 문법 보기</button>
+<aside id="grammarPanel" aria-label="Lox 문법 참조">
+  <div class="gp-head">
+    <b>Lox 문법 (~11장)</b>
+    <button class="btn ghost" id="grammarClose" style="padding:5px 11px">✕ 닫기</button>
+  </div>
+  <div class="gp-body" id="grammarBody"></div>
+</aside>
+
+<script>
+/* =========================================================================
+   1) SCANNER  — 어휘 문법
+   ========================================================================= */
+const KEYWORDS = {and:'AND',or:'OR',var:'VAR',fun:'FUN',return:'RETURN',
+  if:'IF',else:'ELSE',while:'WHILE',for:'FOR',print:'PRINT',
+  true:'TRUE',false:'FALSE',nil:'NIL'};
+
+function scan(src){
+  const toks=[]; let i=0, line=1;
+  const isDigit=c=> c>='0'&&c<='9';
+  const isAlpha=c=> (c>='a'&&c<='z')||(c>='A'&&c<='Z')||c==='_';
+  const add=(type,lexeme,literal)=>toks.push({type,lexeme,literal,line});
+  while(i<src.length){
+    const c=src[i++];
+    switch(c){
+      case '(':add('LEFT_PAREN','(');break;
+      case ')':add('RIGHT_PAREN',')');break;
+      case '{':add('LEFT_BRACE','{');break;
+      case '}':add('RIGHT_BRACE','}');break;
+      case ',':add('COMMA',',');break;
+      case '.':add('DOT','.');break;
+      case '-':add('MINUS','-');break;
+      case '+':add('PLUS','+');break;
+      case ';':add('SEMICOLON',';');break;
+      case '*':add('STAR','*');break;
+      case '!': if(src[i]==='='){i++;add('BANG_EQUAL','!=');}else add('BANG','!');break;
+      case '=': if(src[i]==='='){i++;add('EQUAL_EQUAL','==');}else add('EQUAL','=');break;
+      case '<': if(src[i]==='='){i++;add('LESS_EQUAL','<=');}else add('LESS','<');break;
+      case '>': if(src[i]==='='){i++;add('GREATER_EQUAL','>=');}else add('GREATER','>');break;
+      case '/':
+        if(src[i]==='/'){ while(i<src.length && src[i]!=='\n') i++; }
+        else add('SLASH','/');
+        break;
+      case ' ': case '\r': case '\t': break;
+      case '\n': line++; break;
+      case '"': {
+        let s=''; while(i<src.length && src[i]!=='"'){ if(src[i]==='\n')line++; s+=src[i++]; }
+        if(i>=src.length) throw {line,message:'Unterminated string.'};
+        i++; add('STRING','"'+s+'"',s); break;
+      }
+      default:
+        if(isDigit(c)){
+          let num=c; while(i<src.length&&isDigit(src[i])) num+=src[i++];
+          if(src[i]==='.'&&isDigit(src[i+1])){ num+=src[i++]; while(i<src.length&&isDigit(src[i])) num+=src[i++]; }
+          add('NUMBER',num,parseFloat(num));
+        } else if(isAlpha(c)){
+          let id=c; while(i<src.length&&(isAlpha(src[i])||isDigit(src[i]))) id+=src[i++];
+          add(KEYWORDS[id]||'IDENTIFIER', id);
+        } else {
+          throw {line,message:"Unexpected character '"+c+"'."};
+        }
+    }
+  }
+  add('EOF','');
+  return toks;
+}
+
+/* =========================================================================
+   2) PARSER — 구문 문법 (책 11장, 재귀 하향)
+   ========================================================================= */
+function parse(tokens){
+  let cur=0;
+  const peek=()=>tokens[cur];
+  const prev=()=>tokens[cur-1];
+  const atEnd=()=>peek().type==='EOF';
+  const check=t=> !atEnd() && peek().type===t;
+  const advance=()=>{ if(!atEnd())cur++; return prev(); };
+  const match=(...ts)=>{ for(const t of ts) if(check(t)){advance();return true;} return false; };
+  const consume=(t,msg)=>{ if(check(t))return advance(); throw err(peek(),msg); };
+  const err=(tok,msg)=>({line:tok.line, message: (tok.type==='EOF'?"끝에서":"'"+tok.lexeme+"' 근처에서")+": "+msg});
+
+  function program(){ const stmts=[]; while(!atEnd()) stmts.push(declaration()); return {type:'Program',statements:stmts}; }
+
+  function declaration(){
+    if(match('FUN')) return func('function');
+    if(match('VAR')) return varDecl();
+    return statement();
+  }
+
+  function func(kind){
+    const name=consume('IDENTIFIER','Expect '+kind+' name.');
+    consume('LEFT_PAREN',"Expect '(' after "+kind+" name.");
+    const params=[];
+    if(!check('RIGHT_PAREN')){
+      do{
+        if(params.length>=255) throw err(peek(),"Can't have more than 255 parameters.");
+        params.push(consume('IDENTIFIER','Expect parameter name.'));
+      }while(match('COMMA'));
+    }
+    consume('RIGHT_PAREN',"Expect ')' after parameters.");
+    consume('LEFT_BRACE',"Expect '{' before "+kind+" body.");
+    const body=block();
+    return {type:'Function',name,params,body};
+  }
+
+  function varDecl(){
+    const name=consume('IDENTIFIER','Expect variable name.');
+    let init=null;
+    if(match('EQUAL')) init=expression();
+    consume('SEMICOLON',"Expect ';' after variable declaration.");
+    return {type:'Var',name,initializer:init};
+  }
+
+  function statement(){
+    if(match('FOR')) return forStmt();
+    if(match('IF')) return ifStmt();
+    if(match('PRINT')) return printStmt();
+    if(match('RETURN')) return returnStmt();
+    if(match('WHILE')) return whileStmt();
+    if(match('LEFT_BRACE')) return {type:'Block',statements:block()};
+    return exprStmt();
+  }
+
+  function forStmt(){
+    consume('LEFT_PAREN',"Expect '(' after 'for'.");
+    let init;
+    if(match('SEMICOLON')) init=null;
+    else if(match('VAR')) init=varDecl();
+    else init=exprStmt();
+
+    let cond=null;
+    if(!check('SEMICOLON')) cond=expression();
+    consume('SEMICOLON',"Expect ';' after loop condition.");
+
+    let incr=null;
+    if(!check('RIGHT_PAREN')) incr=expression();
+    consume('RIGHT_PAREN',"Expect ')' after for clauses.");
+
+    let body=statement();
+    // --- 디슈가링: for → block/while ---
+    if(incr!==null){
+      body={type:'Block',statements:[body,{type:'Expression',expression:incr}],_desugar:'증감 추가'};
+    }
+    if(cond===null) cond={type:'Literal',value:true};
+    body={type:'While',condition:cond,body:body,_desugar:'for → while'};
+    if(init!==null){
+      body={type:'Block',statements:[init,body],_desugar:'초기화 래핑'};
+    }
+    return body;
+  }
+
+  function ifStmt(){
+    consume('LEFT_PAREN',"Expect '(' after 'if'.");
+    const cond=expression();
+    consume('RIGHT_PAREN',"Expect ')' after if condition.");
+    const then=statement();
+    let els=null;
+    if(match('ELSE')) els=statement();
+    return {type:'If',condition:cond,then,else:els};
+  }
+
+  function printStmt(){ const v=expression(); consume('SEMICOLON',"Expect ';' after value."); return {type:'Print',expression:v}; }
+  function returnStmt(){ const kw=prev(); let v=null; if(!check('SEMICOLON')) v=expression(); consume('SEMICOLON',"Expect ';' after return value."); return {type:'Return',keyword:kw,value:v}; }
+  function whileStmt(){ consume('LEFT_PAREN',"Expect '(' after 'while'."); const c=expression(); consume('RIGHT_PAREN',"Expect ')' after condition."); const b=statement(); return {type:'While',condition:c,body:b}; }
+  function exprStmt(){ const e=expression(); consume('SEMICOLON',"Expect ';' after expression."); return {type:'Expression',expression:e}; }
+
+  function block(){
+    const stmts=[];
+    while(!check('RIGHT_BRACE')&&!atEnd()) stmts.push(declaration());
+    consume('RIGHT_BRACE',"Expect '}' after block.");
+    return stmts;
+  }
+
+  // ---- expressions ----
+  function expression(){ return assignment(); }
+
+  function assignment(){
+    const expr=or();
+    if(match('EQUAL')){
+      const equals=prev();
+      const value=assignment();
+      if(expr.type==='Variable') return {type:'Assign',name:expr.name,value};
+      throw err(equals,'Invalid assignment target.');
+    }
+    return expr;
+  }
+  function or(){ let e=and(); while(match('OR')){ const op=prev(); const r=and(); e={type:'Logical',left:e,operator:op,right:r}; } return e; }
+  function and(){ let e=equality(); while(match('AND')){ const op=prev(); const r=equality(); e={type:'Logical',left:e,operator:op,right:r}; } return e; }
+  function equality(){ let e=comparison(); while(match('BANG_EQUAL','EQUAL_EQUAL')){ const op=prev(); const r=comparison(); e={type:'Binary',left:e,operator:op,right:r}; } return e; }
+  function comparison(){ let e=term(); while(match('GREATER','GREATER_EQUAL','LESS','LESS_EQUAL')){ const op=prev(); const r=term(); e={type:'Binary',left:e,operator:op,right:r}; } return e; }
+  function term(){ let e=factor(); while(match('MINUS','PLUS')){ const op=prev(); const r=factor(); e={type:'Binary',left:e,operator:op,right:r}; } return e; }
+  function factor(){ let e=unary(); while(match('SLASH','STAR')){ const op=prev(); const r=unary(); e={type:'Binary',left:e,operator:op,right:r}; } return e; }
+  function unary(){ if(match('BANG','MINUS')){ const op=prev(); const r=unary(); return {type:'Unary',operator:op,right:r}; } return call(); }
+  function call(){
+    let e=primary();
+    while(true){
+      if(match('LEFT_PAREN')) e=finishCall(e);
+      else break;
+    }
+    return e;
+  }
+  function finishCall(callee){
+    const args=[];
+    if(!check('RIGHT_PAREN')){
+      do{
+        if(args.length>=255) throw err(peek(),"Can't have more than 255 arguments.");
+        args.push(expression());
+      }while(match('COMMA'));
+    }
+    const paren=consume('RIGHT_PAREN',"Expect ')' after arguments.");
+    return {type:'Call',callee,paren,arguments:args};
+  }
+  function primary(){
+    if(match('FALSE')) return {type:'Literal',value:false};
+    if(match('TRUE')) return {type:'Literal',value:true};
+    if(match('NIL')) return {type:'Literal',value:null};
+    if(match('NUMBER','STRING')) return {type:'Literal',value:prev().literal};
+    if(match('IDENTIFIER')) return {type:'Variable',name:prev()};
+    if(match('LEFT_PAREN')){ const e=expression(); consume('RIGHT_PAREN',"Expect ')' after expression."); return {type:'Grouping',expression:e}; }
+    throw err(peek(),'Expect expression.');
+  }
+
+  return program();
+}
+
+/* =========================================================================
+   3) AST 렌더링
+   ========================================================================= */
+const STMT_TYPES=new Set(['Program','Var','Function','Expression','Print','Return','If','While','Block']);
+const LEAF_TYPES=new Set(['Literal','Variable']);
+
+function describe(node){
+  // returns {title, badgeClass, fields:[{key, node?|text?}], extra?}
+  const t=node.type;
+  const lit=v=> v===null?'nil': typeof v==='string'?'"'+v+'"': String(v);
+  switch(t){
+    case 'Program': return {title:'Program', fields: node.statements.map((s,i)=>({key:'['+i+']',node:s}))};
+    case 'Var': return {title:'Var', fields:[{key:'name',text:node.name.lexeme}, ...(node.initializer?[{key:'init',node:node.initializer}]:[])]};
+    case 'Function': return {title:'Function', fields:[{key:'name',text:node.name.lexeme},{key:'params',text:'('+node.params.map(p=>p.lexeme).join(', ')+')'}, ...node.body.map((s,i)=>({key:'body['+i+']',node:s}))]};
+    case 'Expression': return {title:'Expression', fields:[{key:'expr',node:node.expression}]};
+    case 'Print': return {title:'Print', fields:[{key:'expr',node:node.expression}]};
+    case 'Return': return {title:'Return', fields: node.value?[{key:'value',node:node.value}]:[{key:'value',text:'nil'}]};
+    case 'If': return {title:'If', fields:[{key:'cond',node:node.condition},{key:'then',node:node.then}, ...(node.else?[{key:'else',node:node.else}]:[])]};
+    case 'While': return {title:'While', extra:node._desugar, fields:[{key:'cond',node:node.condition},{key:'body',node:node.body}]};
+    case 'Block': return {title:'Block', extra:node._desugar, fields: node.statements.map((s,i)=>({key:'['+i+']',node:s}))};
+    case 'Assign': return {title:'Assign', fields:[{key:'name',text:node.name.lexeme},{key:'value',node:node.value}]};
+    case 'Logical': return {title:'Logical', op:node.operator.lexeme, fields:[{key:'left',node:node.left},{key:'right',node:node.right}]};
+    case 'Binary': return {title:'Binary', op:node.operator.lexeme, fields:[{key:'left',node:node.left},{key:'right',node:node.right}]};
+    case 'Unary': return {title:'Unary', op:node.operator.lexeme, fields:[{key:'right',node:node.right}]};
+    case 'Call': return {title:'Call', fields:[{key:'callee',node:node.callee}, ...node.arguments.map((a,i)=>({key:'arg['+i+']',node:a}))]};
+    case 'Grouping': return {title:'Grouping', fields:[{key:'expr',node:node.expression}]};
+    case 'Literal': return {title:'Literal', leafText:lit(node.value)};
+    case 'Variable': return {title:'Variable', leafText:node.name.lexeme};
+    default: return {title:t, fields:[]};
+  }
+}
+
+function badgeClass(t){
+  if(LEAF_TYPES.has(t)) return 'b-leaf';
+  if(STMT_TYPES.has(t)) return 'b-stmt';
+  return 'b-expr';
+}
+
+function renderNode(node){
+  const d=describe(node);
+  const wrap=document.createElement('div'); wrap.className='node';
+  const head=document.createElement('div'); head.className='nhead';
+
+  const hasChildren = d.fields && d.fields.some(f=>f.node);
+  const toggle=document.createElement('span'); toggle.className='toggle';
+  toggle.textContent = hasChildren?'▾':'';
+  head.appendChild(toggle);
+
+  const badge=document.createElement('span');
+  badge.className='badge '+badgeClass(node.type);
+  badge.textContent=d.title;
+  head.appendChild(badge);
+
+  if(d.op){ const o=document.createElement('span'); o.className='badge b-op'; o.textContent=d.op; head.appendChild(o); }
+  if(d.leafText!==undefined){ const v=document.createElement('span'); v.className='val'; v.textContent=d.leafText; head.appendChild(v); }
+  if(d.extra){ const e=document.createElement('span'); e.className='field'; e.textContent='⟵ '+d.extra; e.style.color='#ffb454'; head.appendChild(e); }
+
+  wrap.appendChild(head);
+
+  const body=document.createElement('div'); body.className='body';
+  if(d.fields){
+    for(const f of d.fields){
+      if(f.node){
+        const row=document.createElement('div');
+        const fk=document.createElement('span'); fk.className='field'; fk.textContent=f.key+':';
+        row.appendChild(fk);
+        const child=renderNode(f.node);
+        child.style.display='inline-block'; child.style.verticalAlign='top';
+        row.appendChild(child);
+        body.appendChild(row);
+      } else if(f.text!==undefined){
+        const row=document.createElement('div');
+        row.innerHTML='<span class="field">'+f.key+':</span> <span class="val">'+escapeHtml(f.text)+'</span>';
+        body.appendChild(row);
+      }
+    }
+  }
+  if(hasChildren){
+    wrap.appendChild(body);
+    toggle.style.cursor='pointer';
+    toggle.onclick=()=>{ const hidden=body.style.display==='none'; body.style.display=hidden?'':'none'; toggle.textContent=hidden?'▾':'▸'; };
+  }
+  return wrap;
+}
+
+function escapeHtml(s){ return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+/* =========================================================================
+   4) UI 연결
+   ========================================================================= */
+const $=id=>document.getElementById(id);
+
+// 입력을 트레이스로 만들고 마지막 단계(=최종 AST)로 점프
+function run(){
+  stopAuto();
+  try{ STEP=traceExpr($('src').value); }
+  catch(e){ STEP={steps:[{stack:[],cursor:0,msg:'✗ 스캔 에러 [line '+(e.line||'?')+'] '+(e.message||e),forest:[],highlight:null,err:true}],tokens:[]}; }
+  stepIdx=STEP.steps.length-1;
+  renderStep();
+}
+
+function setAllNodes(open){
+  document.querySelectorAll('#stepForest .body').forEach(b=>{ b.style.display=open?'':'none'; });
+  document.querySelectorAll('#stepForest .toggle').forEach(t=>{ if(t.textContent) t.textContent=open?'▾':'▸'; });
+}
+
+/* samples — code + why(트리가 그렇게 나오는 이유) */
+const SAMPLES={
+  '연산자 우선순위':{ code:'print 1 + 2 * 3 - 4 / 2;', why:
+    '<b>왜 루트가 <code class="mono">-</code> 인가?</b> term 규칙이 <code class="mono">+ -</code>를 <b>왼쪽 결합</b>으로 처리한다. '+
+    '<code class="mono">1+2*3</code>를 먼저 만들고, 그 전체를 왼쪽 자식으로 둔 채 <code class="mono">- (4/2)</code>를 붙이므로 '+
+    '마지막 연산인 <code class="mono">-</code>가 꼭대기에 온다(원칙②). '+
+    '<b>왜 <code class="mono">*</code>·<code class="mono">/</code>가 더 깊은가?</b> factor 규칙이 term보다 아래 단계라, '+
+    '<code class="mono">2*3</code>과 <code class="mono">4/2</code>가 덧/뺄셈보다 안쪽 노드가 된다(원칙①). 즉 곱셈이 먼저 계산된다.' },
+
+  '논리/비교':{ code:'print a >= 10 and b < 20 or c == nil;', why:
+    '우선순위는 <code class="mono">or</code> &lt; <code class="mono">and</code> &lt; 비교(<code class="mono">&gt;= &lt; ==</code>). '+
+    '가장 약한 <code class="mono">or</code>가 루트가 되고, 그 왼쪽에 <code class="mono">and</code>, '+
+    '그 아래에 각 비교식이 놓인다. 그래서 의미는 <code class="mono">((a&gt;=10) and (b&lt;20)) or (c==nil)</code> 이다.' },
+
+  '할당 우결합':{ code:'a = b = 1;', why:
+    '<b>왜 오른쪽으로 깊어지나?</b> assignment 규칙은 <code class="mono">=</code>를 만나면 우변을 <b>다시 assignment로 재귀</b> 호출한다(원칙③). '+
+    '그래서 <code class="mono">a = (b = 1)</code> 구조가 되어 Assign 노드 안에 또 Assign이 들어간다. '+
+    '<code class="mono">b=1</code>이 먼저 평가되고 그 값이 <code class="mono">a</code>에 들어간다.' },
+
+  '잘못된 할당(에러)':{ code:'a + b = 1;', why:
+    '<b>왜 에러인가?</b> assignment는 먼저 좌변을 평범한 표현식으로 파싱한다 → <code class="mono">a + b</code>(Binary). '+
+    '그 뒤 <code class="mono">=</code>를 보고 "방금 파싱한 게 변수(Expr.Variable)인가?"를 확인하는데, Binary라 대상이 될 수 없다. '+
+    '그래서 "Invalid assignment target." 에러를 던진다. 좌변이 l-value(저장 장소)가 아니기 때문.' },
+
+  'if / else':{ code:'if (x > 0) print "pos"; else print "neg";', why:
+    'ifStmt는 조건·then·else(선택)를 자식으로 갖는 <b>문(statement)</b> 노드다. '+
+    'then/else 자리에는 다시 statement가 오므로 어떤 문장이든 중첩 가능하다. '+
+    '<code class="mono">else</code>는 항상 <b>가장 가까운 if</b>에 붙는다(dangling-else는 가까운 쪽 우선으로 해소).' },
+
+  'for → while 디슈가':{ code:'for (var i = 0; i < 3; i = i + 1)\n  print i;', why:
+    '<b>AST에 For 노드가 없다!</b> 파서가 for를 즉시 기존 노드로 번역(디슈가링)하기 때문이다. '+
+    '바깥 <code class="mono">Block</code>(초기화 <code class="mono">var i=0</code>) → <code class="mono">While</code>(조건 <code class="mono">i&lt;3</code>) → '+
+    '안쪽 <code class="mono">Block</code>(본문 + 증감 <code class="mono">i=i+1</code>) 순서로 조립된다. '+
+    '각 노드의 <span style="color:#ffb454">⟵ 표시</span>가 어느 for 절에서 왔는지 알려준다.' },
+
+  '함수 + return':{ code:'fun add(a, b) {\n  return a + b;\n}\nprint add(1, 2 * 3);', why:
+    '<code class="mono">Function</code> 노드는 이름·파라미터·본문(block)을 갖는다. '+
+    '호출 <code class="mono">add(1, 2*3)</code>는 call 규칙이 만든 <code class="mono">Call</code> 노드로, '+
+    'callee(<code class="mono">add</code>)와 인자 리스트를 자식으로 둔다. 인자 <code class="mono">2*3</code>은 factor가 먼저 묶어 Binary가 된다.' },
+
+  '중첩 함수(클로저)':{ code:'fun outer() {\n  var x = 10;\n  fun inner() { return x; }\n  return inner;\n}\nprint outer()();', why:
+    '함수 본문 안에 또 Function 선언이 들어간 중첩 구조. <code class="mono">outer()()</code>는 call 규칙이 '+
+    '<code class="mono">( )</code>가 이어지는 동안 반복하며 <b>Call(Call(outer))</b>로 두 번 감싼다 — 먼저 outer() 호출 결과(함수)를 다시 호출. '+
+    '11장 Resolver가 바로 이 <code class="mono">x</code> 참조가 몇 단계 바깥 스코프인지 미리 계산한다.' },
+};
+function buildSamples(){
+  const box=$('samples');
+  Object.keys(SAMPLES).forEach((k)=>{
+    const b=document.createElement('button'); b.className='btn ghost'; b.textContent=k;
+    b.onclick=()=>{ $('src').value=SAMPLES[k].code; run(); $('astWhy').innerHTML='<b>'+k+'</b> · '+SAMPLES[k].why; };
+    box.appendChild(b);
+  });
+}
+
+/* precedence ladder — 각 줄에 실제 생성 규칙(production)을 함께 표시 */
+const S=s=>'<code class="s">'+s+'</code>'; // 터미널(문자열) 색상
+const LADDER=[
+  ['expression', 'assignment',
+    '진입점. 모든 표현식 파싱은 여기서 시작해 assignment를 부른다.'],
+  ['assignment', 'IDENTIFIER '+S('"="')+' assignment | logic_or',
+    '오른쪽 결합. 먼저 logic_or를 파싱하고 = 가 오면 대상이 변수인지 확인 후 Assign으로 변환.'],
+  ['logic_or', 'logic_and ( '+S('"or"')+' logic_and )*',
+    '단락 평가. 왼쪽이 참이면 오른쪽을 평가하지 않음(인터프리터 단계).'],
+  ['logic_and', 'equality ( '+S('"and"')+' equality )*',
+    'or보다 강하게 묶임. 단락 평가 적용.'],
+  ['equality', 'comparison ( ( '+S('"!="')+' | '+S('"=="')+' ) comparison )*',
+    '값이 같은가/다른가. 왼쪽 결합.'],
+  ['comparison', 'term ( ( '+S('"&gt;"')+' | '+S('"&gt;="')+' | '+S('"&lt;"')+' | '+S('"&lt;="')+' ) term )*',
+    '대소 비교. 왼쪽 결합.'],
+  ['term', 'factor ( ( '+S('"-"')+' | '+S('"+"')+' ) factor )*',
+    '덧셈/뺄셈. 왼쪽 결합.'],
+  ['factor', 'unary ( ( '+S('"/"')+' | '+S('"*"')+' ) unary )*',
+    '곱셈/나눗셈 — term보다 강하게 묶여 트리 아래쪽에 위치.'],
+  ['unary', '( '+S('"!"')+' | '+S('"-"')+' ) unary | call',
+    '전위 단항. 오른쪽으로 재귀 → !!x, --x 같은 연쇄 허용.'],
+  ['call', 'primary ( '+S('"("')+' arguments? '+S('")"')+' )*',
+    '함수 호출. primary 뒤에 ( )가 이어지는 동안 반복해서 Call로 감쌈.'],
+  ['primary', S('"true"')+' | '+S('"false"')+' | '+S('"nil"')+' | NUMBER | STRING | IDENTIFIER | '+S('"("')+' expression '+S('")"')+'',
+    '가장 강하게 묶이는 단위. 숫자/문자열/true/false/nil/식별자/괄호식.'],
+];
+function buildLadder(){
+  const box=$('ladder');
+  LADDER.forEach(([name,prod,desc],i)=>{
+    const r=document.createElement('div'); r.className='rung'; r.dataset.idx=i;
+    r.innerHTML='<span class="name">'+name+'</span>'+
+                '<span class="ops"><span class="prod-arrow">→</span> '+prod+'</span>';
+    r.onclick=()=>{
+      document.querySelectorAll('.rung').forEach(x=>x.classList.remove('active'));
+      r.classList.add('active');
+      const next=LADDER[i+1];
+      $('ladInfo').innerHTML='<b>'+name+'</b> — '+desc+(next?' <span style="color:var(--muted)">다음 호출 → <b style="color:var(--primary)">'+next[0]+'</b></span>':' <span style="color:var(--muted)">(최하위)</span>');
+    };
+    box.appendChild(r);
+  });
+}
+
+/* =========================================================================
+   5) STEP-THROUGH — 계측 파서 (표현식 전용). 단계별 trace를 기록한다.
+   ========================================================================= */
+function childNodes(node){
+  let c;
+  switch(node.type){
+    case 'Binary': case 'Logical': c=[node.left, node.right]; break;
+    case 'Unary': c=[node.right]; break;
+    case 'Grouping': c=[node.expression]; break;
+    case 'Assign': c=[node.value]; break;
+    case 'Call': c=[node.callee, ...node.arguments]; break;
+    case 'Program': case 'Block': c=node.statements; break;
+    case 'Function': c=node.body; break;
+    case 'Var': c=[node.initializer]; break;
+    case 'Expression': case 'Print': c=[node.expression]; break;
+    case 'Return': c=[node.value]; break;
+    case 'If': c=[node.condition, node.then, node.else]; break;
+    case 'While': c=[node.condition, node.body]; break;
+    default: c=[];
+  }
+  return c.filter(Boolean);
+}
+
+function traceExpr(src){
+  const tokens=scan(src);
+  let cur=0, nid=0;
+  const stack=[];   // 호출 스택 (규칙 이름)
+  const forest=[];  // 완성됐지만 아직 부모에 안 붙은 노드들 (operand forest)
+  const steps=[];
+
+  const peek=()=>tokens[cur];
+  const prev=()=>tokens[cur-1];
+  const atEnd=()=>peek().type==='EOF';
+  const check=t=> !atEnd() && peek().type===t;
+
+  function snap(msg, highlight, err){
+    steps.push({stack:stack.slice(), cursor:cur, msg, forest:forest.slice(), highlight: highlight??null, err:!!err});
+  }
+  function enter(rule){ stack.push(rule); snap('규칙 '+rule+'() 진입 — 한 단계 더 강한 규칙으로 내려감'); }
+  function exit(rule, ret){ snap('규칙 '+rule+'() 반환'); stack.pop(); return ret; }
+  function advance(){ if(!atEnd())cur++; return prev(); }
+  function match(...ts){
+    for(const t of ts) if(check(t)){ advance(); snap("토큰 소비: '"+prev().lexeme+"'  → 커서 전진"); return true; }
+    return false;
+  }
+  function consume(t,msg){ if(check(t)){advance(); snap("토큰 소비: '"+prev().lexeme+"'"); return prev();} throw {message:msg, line:peek().line}; }
+  function create(node, msg, extra){
+    node._id=nid++;
+    for(const c of childNodes(node).concat(extra||[])){ const i=forest.indexOf(c); if(i>=0) forest.splice(i,1); }
+    forest.push(node);
+    snap(msg, node._id);
+    return node;
+  }
+
+  function expression(){ enter('expression'); return exit('expression', assignment()); }
+  function assignment(){
+    enter('assignment');
+    const e=or();
+    if(match('EQUAL')){
+      const value=assignment();
+      if(e.type!=='Variable') throw {message:'Invalid assignment target. (좌변이 변수가 아님)'};
+      // 타깃은 이름(토큰)만 사용하므로, forest에 떠 있던 좌변 Variable 노드도 함께 소비(extra)
+      return exit('assignment', create({type:'Assign',name:e.name,value}, "노드 생성: Assign — 우변을 다시 assignment로 재귀 → 오른쪽 결합", [e]));
+    }
+    return exit('assignment', e);
+  }
+  function binaryRule(name, sub, ...ops){
+    enter(name);
+    let e=sub();
+    while(match(...ops)){
+      const op=prev();
+      const r=sub();
+      e=create({type:'Binary',left:e,operator:op,right:r}, "노드 생성: Binary('"+op.lexeme+"') — 왼쪽 결과 + 오른쪽 결과를 합침");
+    }
+    return exit(name, e);
+  }
+  function or(){
+    enter('logic_or');
+    let e=and();
+    while(match('OR')){ const op=prev(); const r=and(); e=create({type:'Logical',left:e,operator:op,right:r}, "노드 생성: Logical('or')"); }
+    return exit('logic_or', e);
+  }
+  function and(){
+    enter('logic_and');
+    let e=equality();
+    while(match('AND')){ const op=prev(); const r=equality(); e=create({type:'Logical',left:e,operator:op,right:r}, "노드 생성: Logical('and')"); }
+    return exit('logic_and', e);
+  }
+  function equality(){ return binaryRule('equality', comparison, 'BANG_EQUAL','EQUAL_EQUAL'); }
+  function comparison(){ return binaryRule('comparison', term, 'GREATER','GREATER_EQUAL','LESS','LESS_EQUAL'); }
+  function term(){ return binaryRule('term', factor, 'MINUS','PLUS'); }
+  function factor(){ return binaryRule('factor', unary, 'SLASH','STAR'); }
+  function unary(){
+    enter('unary');
+    if(match('BANG','MINUS')){ const op=prev(); const r=unary(); return exit('unary', create({type:'Unary',operator:op,right:r}, "노드 생성: Unary('"+op.lexeme+"')")); }
+    return exit('unary', call());
+  }
+  function call(){
+    enter('call');
+    let e=primary();
+    while(match('LEFT_PAREN')){
+      const args=[];
+      if(!check('RIGHT_PAREN')){ do{ args.push(expression()); }while(match('COMMA')); }
+      consume('RIGHT_PAREN',"Expect ')' after arguments.");
+      e=create({type:'Call',callee:e,paren:null,arguments:args}, "노드 생성: Call — callee 뒤 ( ) 발견");
+    }
+    return exit('call', e);
+  }
+  function primary(){
+    enter('primary');
+    let node;
+    if(match('FALSE')) node=create({type:'Literal',value:false}, '노드 생성: Literal(false) ← 잎');
+    else if(match('TRUE')) node=create({type:'Literal',value:true}, '노드 생성: Literal(true) ← 잎');
+    else if(match('NIL')) node=create({type:'Literal',value:null}, '노드 생성: Literal(nil) ← 잎');
+    else if(match('NUMBER','STRING')){ const t=prev(); node=create({type:'Literal',value:t.literal}, "노드 생성: Literal("+t.lexeme+") ← 잎"); }
+    else if(match('IDENTIFIER')){ const t=prev(); node=create({type:'Variable',name:t}, "노드 생성: Variable("+t.lexeme+") ← 잎"); }
+    else if(match('LEFT_PAREN')){ const inner=expression(); consume('RIGHT_PAREN',"Expect ')' after expression."); node=create({type:'Grouping',expression:inner}, '노드 생성: Grouping ( )'); }
+    else throw {message:'Expect expression.', line:peek().line};
+    return exit('primary', node);
+  }
+
+  // ---- statements ----
+  function program(){
+    enter('program');
+    const stmts=[];
+    while(!atEnd()) stmts.push(declaration());
+    return exit('program', create({type:'Program',statements:stmts}, '노드 생성: Program — 모든 선언을 하나로 모음'));
+  }
+  function declaration(){
+    enter('declaration');
+    if(match('FUN')) return exit('declaration', func('function'));
+    if(match('VAR')) return exit('declaration', varDecl());
+    return exit('declaration', statement());
+  }
+  function func(kind){
+    enter('function');
+    const name=consume('IDENTIFIER','Expect '+kind+' name.');
+    consume('LEFT_PAREN',"Expect '(' after "+kind+" name.");
+    const params=[];
+    if(!check('RIGHT_PAREN')){ do{ params.push(consume('IDENTIFIER','Expect parameter name.')); }while(match('COMMA')); }
+    consume('RIGHT_PAREN',"Expect ')' after parameters.");
+    consume('LEFT_BRACE',"Expect '{' before "+kind+" body.");
+    const body=blockStmts();
+    return exit('function', create({type:'Function',name,params,body}, "노드 생성: Function '"+name.lexeme+"' — 본문 묶음"));
+  }
+  function blockStmts(){
+    enter('block');
+    const stmts=[];
+    while(!check('RIGHT_BRACE')&&!atEnd()) stmts.push(declaration());
+    consume('RIGHT_BRACE',"Expect '}' after block.");
+    exit('block');
+    return stmts;
+  }
+  function statement(){
+    enter('statement');
+    if(match('FOR')) return exit('statement', forStmt());
+    if(match('IF')) return exit('statement', ifStmt());
+    if(match('PRINT')) return exit('statement', printStmt());
+    if(match('RETURN')) return exit('statement', returnStmt());
+    if(match('WHILE')) return exit('statement', whileStmt());
+    if(match('LEFT_BRACE')) return exit('statement', create({type:'Block',statements:blockStmts()}, '노드 생성: Block { }'));
+    return exit('statement', exprStmt());
+  }
+  function varDecl(){
+    enter('varDecl');
+    const name=consume('IDENTIFIER','Expect variable name.');
+    let init=null;
+    if(match('EQUAL')) init=expression();
+    consume('SEMICOLON',"Expect ';' after variable declaration.");
+    return exit('varDecl', create({type:'Var',name,initializer:init}, "노드 생성: Var '"+name.lexeme+"'"));
+  }
+  function printStmt(){
+    enter('printStmt');
+    const v=expression();
+    consume('SEMICOLON',"Expect ';' after value.");
+    return exit('printStmt', create({type:'Print',expression:v}, '노드 생성: Print'));
+  }
+  function returnStmt(){
+    enter('returnStmt');
+    const kw=prev();
+    let v=null;
+    if(!check('SEMICOLON')) v=expression();
+    consume('SEMICOLON',"Expect ';' after return value.");
+    return exit('returnStmt', create({type:'Return',keyword:kw,value:v}, '노드 생성: Return'));
+  }
+  function whileStmt(){
+    enter('whileStmt');
+    consume('LEFT_PAREN',"Expect '(' after 'while'.");
+    const c=expression();
+    consume('RIGHT_PAREN',"Expect ')' after condition.");
+    const b=statement();
+    return exit('whileStmt', create({type:'While',condition:c,body:b}, '노드 생성: While'));
+  }
+  function ifStmt(){
+    enter('ifStmt');
+    consume('LEFT_PAREN',"Expect '(' after 'if'.");
+    const c=expression();
+    consume('RIGHT_PAREN',"Expect ')' after if condition.");
+    const then=statement();
+    let els=null;
+    if(match('ELSE')) els=statement();
+    return exit('ifStmt', create({type:'If',condition:c,then,else:els}, '노드 생성: If'+(els?' / else':'')));
+  }
+  function exprStmt(){
+    enter('exprStmt');
+    const e=expression();
+    consume('SEMICOLON',"Expect ';' after expression.");
+    return exit('exprStmt', create({type:'Expression',expression:e}, '노드 생성: Expression statement'));
+  }
+  function forStmt(){
+    enter('forStmt');
+    consume('LEFT_PAREN',"Expect '(' after 'for'.");
+    let init;
+    if(match('SEMICOLON')) init=null;
+    else if(match('VAR')) init=varDecl();
+    else init=exprStmt();
+    let cond=null;
+    if(!check('SEMICOLON')) cond=expression();
+    consume('SEMICOLON',"Expect ';' after loop condition.");
+    let incr=null;
+    if(!check('RIGHT_PAREN')) incr=expression();
+    consume('RIGHT_PAREN',"Expect ')' after for clauses.");
+    let body=statement();
+    // --- 디슈가링: for 노드를 만들지 않고 기존 노드로 번역 ---
+    if(incr!==null){
+      const incrStmt=create({type:'Expression',expression:incr}, '디슈가 ①: 증감식을 Expression statement로 감쌈');
+      body=create({type:'Block',statements:[body,incrStmt],_desugar:'증감 추가'}, '디슈가 ②: 본문 + 증감을 Block으로 묶음');
+    }
+    if(cond===null) cond=create({type:'Literal',value:true}, '디슈가: 조건 생략 → Literal(true)');
+    body=create({type:'While',condition:cond,body:body,_desugar:'for → while'}, '디슈가 ③: 조건+본문을 While로 변환');
+    if(init!==null){
+      body=create({type:'Block',statements:[init,body],_desugar:'초기화 래핑'}, '디슈가 ④: 초기화를 바깥 Block으로 감쌈');
+    }
+    return exit('forStmt', body);
+  }
+
+  snap('시작 — 토큰을 모두 스캔했다. 이제 program()부터 파싱을 시작한다.');
+  let root=null, err=null;
+  try{ root=program(); }
+  catch(e){ err=e; snap('✗ 파싱 에러: '+(e.message||e), null, true); }
+  if(!err) snap('✓ 완료 — 루트 Program 노드 하나만 남았다. 이게 최종 AST.', root?root._id:null);
+  return {steps, tokens, err};
+}
+
+/* ---- stepper UI ---- */
+let STEP=null, stepIdx=0, autoTimer=null;
+
+function renderStep(){
+  if(!STEP) return;
+  const s=STEP.steps[stepIdx];
+  // 토큰 커서
+  const tb=$('stepTokens'); tb.innerHTML='';
+  STEP.tokens.forEach((t,i)=>{
+    if(t.type==='EOF') return;
+    const d=document.createElement('span');
+    d.className='tk'+(i<s.cursor?' done':'')+(i===s.cursor?' cur':'');
+    d.textContent=t.lexeme; tb.appendChild(d);
+  });
+  // 호출 스택
+  const sb=$('stepStack'); sb.innerHTML='';
+  if(s.stack.length===0){ sb.innerHTML='<span class="prec-hint">(스택 비어있음)</span>'; }
+  else s.stack.forEach((r,i)=>{
+    const d=document.createElement('div');
+    d.className='stackframe'+(i===s.stack.length-1?' top':'');
+    d.textContent=r+'()'+(i===s.stack.length-1?'  ◀ 현재':'');
+    sb.appendChild(d);
+  });
+  // 완성된 서브트리(forest)
+  const fb=$('stepForest'); fb.innerHTML='';
+  if(s.forest.length===0){ fb.innerHTML='<span class="prec-hint">아직 만들어진 노드 없음</span>'; }
+  else s.forest.forEach(n=>{ const el=renderNode(n); if(n._id===s.highlight) el.classList.add('fresh'); fb.appendChild(el); });
+  // 메시지 / 카운터
+  const msg=$('stepMsg');
+  msg.innerHTML=(s.err?'<span style="color:var(--danger)">':'')+escapeHtml(s.msg)+(s.err?'</span>':'');
+  $('stepCounter').textContent=(stepIdx+1)+' / '+STEP.steps.length;
+}
+function go(d){ if(!STEP)return; stepIdx=Math.max(0,Math.min(STEP.steps.length-1,stepIdx+d)); renderStep(); }
+function goTo(i){ if(!STEP)return; stepIdx=Math.max(0,Math.min(STEP.steps.length-1,i)); renderStep(); }
+function stopAuto(){ if(autoTimer){ clearInterval(autoTimer); autoTimer=null; $('stepAuto').textContent='⏯ 자동재생'; } }
+function toggleAuto(){
+  if(autoTimer){ stopAuto(); return; }
+  if(!STEP) run();
+  goTo(0);
+  $('stepAuto').textContent='⏸ 정지';
+  autoTimer=setInterval(()=>{ if(stepIdx>=STEP.steps.length-1){ stopAuto(); return; } go(1); }, 650);
+}
+
+/* ---- floating grammar panel ---- */
+function buildGrammarPanel(){
+  const body=$('grammarBody');
+  document.querySelectorAll('.grammar-src').forEach(src=>{
+    const title=document.createElement('div'); title.className='gp-title';
+    title.textContent=src.dataset.gtitle||''; body.appendChild(title);
+    const clone=src.cloneNode(true);
+    clone.classList.remove('card','grammar-src');
+    clone.removeAttribute('style'); // panel CSS가 통일된 스타일 적용
+    body.appendChild(clone);
+  });
+}
+function setPanel(open){
+  $('grammarPanel').classList.toggle('open', open);
+  $('grammarFab').textContent = open ? '📖 문법 닫기' : '📖 문법 보기';
+  document.body.style.marginRight = (open && window.innerWidth>1100) ? Math.min(430, window.innerWidth*0.9)+'px' : '';
+}
+
+/* init */
+buildSamples();
+buildLadder();
+buildGrammarPanel();
+$('grammarFab').onclick=()=>setPanel(!$('grammarPanel').classList.contains('open'));
+$('grammarClose').onclick=()=>setPanel(false);
+window.addEventListener('resize',()=>{ if($('grammarPanel').classList.contains('open')) setPanel(true); });
+setPanel(window.innerWidth>1280);
+
+/* playground + stepper (통합) */
+$('parseBtn').onclick=run;                       // 끝까지(최종 AST)
+$('expandBtn').onclick=()=>setAllNodes(true);
+$('collapseBtn').onclick=()=>setAllNodes(false);
+$('stepFirst').onclick=()=>{ stopAuto(); goTo(0); };
+$('stepPrev').onclick=()=>{ stopAuto(); go(-1); };
+$('stepNext').onclick=()=>{ stopAuto(); go(1); };
+$('stepLast').onclick=()=>{ stopAuto(); goTo(1e9); };
+$('stepAuto').onclick=toggleAuto;
+$('src').addEventListener('keydown',e=>{ if((e.metaKey||e.ctrlKey)&&e.key==='Enter'){ e.preventDefault(); run(); } });
+
+$('src').value=SAMPLES['연산자 우선순위'].code;
+run();
+$('astWhy').innerHTML='<b>연산자 우선순위</b> · '+SAMPLES['연산자 우선순위'].why;
+</script>
+</body>
+</html>
