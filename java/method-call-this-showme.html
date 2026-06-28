@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>메서드 호출 시 this & 환경 체인 흐름</title>
+<style>
+:root{
+  --bg:#0f1117; --panel:#1a1d27; --panel2:#222634; --border:#2a2f3d;
+  --primary:#4f9cff; --accent:#ffb454; --ok:#3ddc97; --danger:#ff6b6b;
+  --purple:#b48cff; --pink:#ff7eb6; --text:#e4e7ee; --muted:#8b93a7;
+  --mono:"SF Mono",Menlo,monospace;
+}
+*{box-sizing:border-box;}
+body{margin:0;background:var(--bg);color:var(--text);line-height:1.6;
+  font-family:-apple-system,"Segoe UI","Apple SD Gothic Neo",sans-serif;}
+.wrap{max-width:1140px;margin:0 auto;padding:30px 20px 90px;}
+header h1{font-size:27px;margin:0 0 6px;}
+header p.sub{color:var(--muted);margin:0 0 24px;font-size:15px;}
+h2{font-size:20px;margin:38px 0 12px;border-left:3px solid var(--primary);padding-left:10px;}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:20px;}
+.muted{color:var(--muted);}
+code,.mono{font-family:var(--mono);}
+.kw{color:#ff7b9c;} .ty{color:#6fdcff;} .st{color:#9be29b;} .cm{color:#6b7280;} .fn{color:#ffd28a;} .nm{color:var(--accent);}
+
+/* roadmap */
+.roadmap{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:center;}
+.rm-node{background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:9px 13px;font-size:12.5px;text-align:center;}
+.rm-node b{color:var(--accent);}
+.rm-arrow{color:var(--muted);font-size:18px;}
+
+/* problem block */
+.codebox{background:#0b0d13;border:1px solid var(--border);border-radius:12px;padding:16px;font-family:var(--mono);font-size:13px;overflow:auto;}
+.codebox .ln{display:block;padding:2px 6px;border-radius:4px;white-space:pre;transition:background .3s;}
+.codebox .ln.active{background:rgba(79,156,255,.18);box-shadow:inset 3px 0 0 var(--primary);}
+
+/* controls */
+.controls{display:flex;gap:10px;flex-wrap:wrap;margin:16px 0;align-items:center;}
+button{background:var(--primary);color:#04122a;border:none;border-radius:9px;padding:10px 16px;font-size:14px;font-weight:700;cursor:pointer;transition:filter .15s,transform .05s;}
+button:hover{filter:brightness(1.1);} button:active{transform:translateY(1px);}
+button.ghost{background:var(--panel2);color:var(--text);border:1px solid var(--border);}
+button:disabled{opacity:.4;cursor:not-allowed;}
+.recv-toggle{display:flex;gap:6px;margin-left:auto;background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:4px;}
+.recv-toggle button{background:transparent;color:var(--muted);padding:7px 16px;font-size:13px;}
+.recv-toggle button.on{background:var(--primary);color:#04122a;}
+.recv-toggle button.on.b{background:var(--pink);color:#2a0716;}
+.stepdot{display:flex;gap:6px;}
+.stepdot span{width:9px;height:9px;border-radius:50%;background:var(--border);}
+.stepdot span.on{background:var(--primary);}
+
+/* narration */
+.narr{background:var(--panel2);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:8px;padding:14px 16px;min-height:84px;}
+.narr .stepnum{color:var(--accent);font-weight:700;font-size:13px;}
+.narr h4{margin:4px 0 6px;font-size:16px;}
+.narr p{margin:0;font-size:14px;}
+.narr .key{color:var(--accent);font-weight:700;}
+
+/* main 3-col stage */
+.stage{display:grid;grid-template-columns:0.85fr 1fr 1fr;gap:16px;margin-top:16px;align-items:start;}
+@media(max-width:980px){.stage{grid-template-columns:1fr;}}
+.col-title{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:8px;}
+
+/* class box (shared method) */
+.classbox{border:2px solid var(--border);border-radius:12px;padding:14px;background:var(--panel2);}
+.classbox .cn{font-weight:700;color:var(--ty,#6fdcff);font-family:var(--mono);margin-bottom:8px;}
+.methodchip{font-family:var(--mono);font-size:13px;background:#0b0d13;border:1px solid var(--border);border-radius:8px;padding:8px 10px;transition:all .35s;}
+.methodchip.flash{border-color:var(--accent);box-shadow:0 0 0 3px rgba(255,180,84,.25);}
+.shared-note{font-size:11px;color:var(--muted);margin-top:8px;}
+
+/* heap instances */
+.heap{display:flex;flex-direction:column;gap:10px;}
+.inst{border:2px dashed var(--border);border-radius:12px;padding:10px 13px;background:#0b0d1366;transition:all .35s;opacity:.55;}
+.inst.a{border-color:rgba(79,156,255,.5);}
+.inst.b{border-color:rgba(255,126,182,.5);}
+.inst.active{opacity:1;}
+.inst.flash{box-shadow:0 0 0 3px rgba(255,180,84,.3);}
+.inst .ih{font-family:var(--mono);font-weight:700;font-size:13px;margin-bottom:6px;}
+.inst.a .ih{color:var(--primary);} .inst.b .ih{color:var(--pink);}
+.field{font-family:var(--mono);font-size:12.5px;padding:2px 8px;border-radius:6px;background:#0b0d13;display:inline-block;}
+.field .fn{color:var(--accent);} .field .fv{color:var(--ok);}
+
+/* env chain */
+.envstack{display:flex;flex-direction:column;gap:0;align-items:center;}
+.envbox{width:100%;border:2px solid var(--border);border-radius:10px;padding:10px 13px;background:var(--panel2);position:relative;opacity:.22;transform:translateY(8px);transition:all .45s cubic-bezier(.2,.8,.2,1);}
+.envbox.show{opacity:1;transform:translateY(0);}
+.envbox.flash{border-color:var(--accent);box-shadow:0 0 0 3px rgba(255,180,84,.25);}
+.envbox.found{border-color:var(--ok);box-shadow:0 0 0 3px rgba(61,220,151,.35);}
+.envbox .et{font-size:11px;font-weight:700;letter-spacing:.3px;margin-bottom:7px;display:flex;justify-content:space-between;}
+.envbox .et .tag{color:var(--muted);font-weight:500;}
+.binding{font-family:var(--mono);font-size:13px;padding:3px 8px;border-radius:6px;background:#0b0d13;margin:3px 0;}
+.binding.this-b{background:rgba(180,140,255,.13);border:1px solid rgba(180,140,255,.45);}
+.binding.this-b .bn{color:var(--purple);font-weight:700;}
+.binding .bn{color:var(--accent);} .binding .bv{color:var(--ok);}
+.enc{color:var(--muted);font-size:17px;margin:2px 0;opacity:.22;transition:opacity .45s;}
+.enc.show{opacity:1;}
+.enc small{font-size:10px;}
+
+.keymsg{background:linear-gradient(135deg,rgba(180,140,255,.12),rgba(79,156,255,.10));border:1px solid rgba(180,140,255,.35);border-radius:14px;padding:20px 22px;margin:28px 0;}
+.keymsg b{color:var(--purple);}
+
+/* compare */
+.compare{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+@media(max-width:760px){.compare{grid-template-columns:1fr;}}
+.cmpcol{border:1px solid var(--border);border-radius:12px;padding:14px;background:var(--panel2);}
+.cmpcol h4{margin:0 0 10px;font-size:14px;font-family:var(--mono);}
+.cmpcol.a h4{color:var(--primary);} .cmpcol.b h4{color:var(--pink);}
+.cmpenv{font-family:var(--mono);font-size:12px;border:1px solid var(--border);border-radius:8px;padding:7px 10px;margin:4px 0;background:#0b0d13;}
+.cmpenv.same{opacity:.6;}
+.cmpenv.diff{border-color:var(--purple);}
+.cmparr{text-align:center;color:var(--muted);font-size:13px;}
+
+table{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:8px;}
+th,td{border:1px solid var(--border);padding:9px 12px;text-align:left;}
+th{background:var(--panel2);color:var(--accent);}
+.pill{display:inline-block;background:var(--panel2);border:1px solid var(--border);border-radius:20px;padding:2px 10px;font-size:12px;color:var(--muted);margin-right:6px;}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;}
+.card{background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:14px;font-size:13px;}
+.card b{color:var(--primary);}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>📞 메서드 호출 시 <span style="color:var(--purple)">this</span>와 환경 체인의 흐름</h1>
+  <p class="sub">하나의 메서드를 공유하는 두 인스턴스 — <code>a.greet()</code>와 <code>b.greet()</code>는 어떻게 서로 다른 <code>this</code>를 보는가</p>
+</header>
+
+<!-- roadmap -->
+<div class="panel">
+  <div class="roadmap">
+    <div class="rm-node"><b>a.greet()</b><br>visitGetExpr</div>
+    <span class="rm-arrow">→</span>
+    <div class="rm-node"><b>get()</b><br>공유 메서드 찾기</div>
+    <span class="rm-arrow">→</span>
+    <div class="rm-node"><b>bind(a)</b><br>this=a 환경 끼움</div>
+    <span class="rm-arrow">→</span>
+    <div class="rm-node"><b>call()</b><br>본문 환경 쌓임</div>
+    <span class="rm-arrow">→</span>
+    <div class="rm-node"><b>getAt("this")</b><br>체인 거슬러 조회</div>
+  </div>
+</div>
+
+<!-- problem -->
+<h2>① 문제 — 메서드는 한 벌, 인스턴스는 여럿</h2>
+<div class="panel">
+  <div class="codebox" style="margin-bottom:12px">
+<span class="ln"><span class="kw">class</span> <span class="ty">Greeter</span> {</span>
+<span class="ln">  <span class="fn">greet</span>() { <span class="kw">print</span> <span class="kw">this</span>.name; }   <span class="cm">// 메서드는 클래스에 딱 1개</span></span>
+<span class="ln">}</span>
+<span class="ln"><span class="kw">var</span> a = <span class="ty">Greeter</span>(); a.name = <span class="st">"A"</span>;</span>
+<span class="ln"><span class="kw">var</span> b = <span class="ty">Greeter</span>(); b.name = <span class="st">"B"</span>;</span>
+<span class="ln">a.<span class="fn">greet</span>();   <span class="cm">// A 가 나와야 함</span></span>
+<span class="ln">b.<span class="fn">greet</span>();   <span class="cm">// B 가 나와야 함</span></span>
+  </div>
+  <p class="muted" style="margin:0">같은 <code>greet</code> 코드 한 벌인데 <code>this.name</code>이 호출에 따라 <b>A도 되고 B도</b> 되어야 한다.
+  메서드 본문 안엔 <code>a</code>·<code>b</code> 같은 변수가 안 보이는데, 어떻게? → 호출 직전에 <span style="color:var(--purple)"><b>this를 담은 환경을 그때그때 끼워넣는다(bind)</b></span>.</p>
+</div>
+
+<!-- simulation -->
+<h2>② 호출 흐름 시뮬레이션 — 리시버를 바꿔가며</h2>
+<div class="controls">
+  <button id="nextBtn" onclick="next()">▶ 다음 단계</button>
+  <button class="ghost" onclick="reset()">↺ 처음으로</button>
+  <div class="stepdot" id="dots"></div>
+  <div class="recv-toggle">
+    <button id="rA" class="on" onclick="setRecv('a')">a.greet()</button>
+    <button id="rB" class="b" onclick="setRecv('b')">b.greet()</button>
+  </div>
+</div>
+
+<div class="narr" id="narr"></div>
+
+<div class="stage">
+  <!-- shared class + heap -->
+  <div>
+    <div class="col-title">클래스 (메서드 공유) · 힙</div>
+    <div class="classbox">
+      <div class="cn">class Greeter</div>
+      <div class="methodchip" id="method">greet = &lt;fn&gt; · closure만 보유</div>
+      <div class="shared-note">⚠ 인스턴스가 몇 개든 이 메서드 객체는 <b>하나</b>다.</div>
+    </div>
+    <div class="heap" style="margin-top:12px">
+      <div class="inst a" id="inst-a"><div class="ih">a : Greeter</div><span class="field"><span class="fn">name</span>=<span class="fv">"A"</span></span></div>
+      <div class="inst b" id="inst-b"><div class="ih">b : Greeter</div><span class="field"><span class="fn">name</span>=<span class="fv">"B"</span></span></div>
+    </div>
+  </div>
+
+  <!-- code -->
+  <div>
+    <div class="col-title">실행되는 인터프리터 코드</div>
+    <div class="codebox" id="code">
+<span class="ln" data-s="1"><span class="cm">// 1) visitGetExpr: a.greet</span></span>
+<span class="ln" data-s="1">obj = evaluate(a); <span class="cm">// LoxInstance</span></span>
+<span class="ln" data-s="1"><span class="kw">return</span> obj.<span class="fn">get</span>(<span class="st">"greet"</span>);</span>
+<span class="ln"> </span>
+<span class="ln" data-s="2"><span class="cm">// 2) LoxInstance.get</span></span>
+<span class="ln" data-s="2">m = clazz.<span class="fn">findMethod</span>(<span class="st">"greet"</span>);</span>
+<span class="ln" data-s="3"><span class="kw">return</span> m.<span class="fn">bind</span>(<span class="kw">this</span>); <span class="cm">// this=리시버</span></span>
+<span class="ln"> </span>
+<span class="ln" data-s="3"><span class="cm">// 3) bind: 중간 환경 끼우기</span></span>
+<span class="ln" data-s="3">env = <span class="kw">new</span> <span class="ty">Environment</span>(closure);</span>
+<span class="ln" data-s="3">env.<span class="fn">define</span>(<span class="st">"this"</span>, inst);</span>
+<span class="ln"> </span>
+<span class="ln" data-s="4"><span class="cm">// 4) 그 함수.call() → 본문 환경</span></span>
+<span class="ln" data-s="4">env = <span class="kw">new</span> <span class="ty">Environment</span>(closure);</span>
+<span class="ln"> </span>
+<span class="ln" data-s="5"><span class="cm">// 5) print this.name</span></span>
+<span class="ln" data-s="5">env.<span class="fn">getAt</span>(dist, <span class="st">"this"</span>);</span>
+<span class="ln" data-s="5">inst.<span class="fn">get</span>(<span class="st">"name"</span>);</span>
+    </div>
+  </div>
+
+  <!-- env chain -->
+  <div>
+    <div class="col-title">환경 체인 (아래 = 바깥)</div>
+    <div class="envstack" id="stack">
+      <div class="envbox" id="env-body">
+        <div class="et">[3] 본문 환경 <span class="tag">call()</span></div>
+        <div class="binding"><span class="muted">(파라미터 없음)</span></div>
+      </div>
+      <div class="enc" id="arr-body">↓ <small>enclosing</small></div>
+      <div class="envbox" id="env-bind">
+        <div class="et">[2] bind 환경 <span class="tag">bind()</span></div>
+        <div class="binding this-b"><span class="bn">this</span> = <span class="bv" id="thisVal">→ a</span></div>
+      </div>
+      <div class="enc" id="arr-bind">↓ <small>enclosing</small></div>
+      <div class="envbox" id="env-closure">
+        <div class="et">[1] closure <span class="tag">클래스 정의 환경</span></div>
+        <div class="binding"><span class="bn">Greeter</span> = <span class="bv">LoxClass</span></div>
+      </div>
+    </div>
+    <div id="result" style="margin-top:12px;font-family:var(--mono);font-size:14px;min-height:24px;"></div>
+  </div>
+</div>
+
+<!-- key -->
+<div class="keymsg">
+  <div style="font-size:13px;color:var(--muted);margin-bottom:6px">핵심</div>
+  <p style="margin:0;font-size:15.5px"><code>a.greet</code>를 읽는 순간 <b>get()</b>이 공유 메서드를 <b>그 인스턴스에 bind한 새 LoxFunction</b>으로 만들어 돌려준다.
+  <code>bind</code>는 <b>"this=리시버"가 든 환경[2]를 본문[3]과 closure[1] 사이에 끼워넣을 뿐</b>.
+  그래서 같은 코드라도 <span style="color:var(--primary)">a로 호출하면 this=a</span>, <span style="color:var(--pink)">b로 호출하면 this=b</span> —
+  <code>this</code> 조회는 그냥 <b>환경 체인을 한 칸 올라가 변수 찾기</b>다.</p>
+</div>
+
+<!-- compare -->
+<h2>③ 나란히 비교 — 딱 한 칸만 다르다</h2>
+<div class="panel">
+  <div class="compare">
+    <div class="cmpcol a">
+      <h4>a.greet() 의 체인</h4>
+      <div class="cmpenv diff">[3] 본문</div>
+      <div class="cmparr">↓</div>
+      <div class="cmpenv diff">[2] bind · <span style="color:var(--purple)">this = a</span></div>
+      <div class="cmparr">↓</div>
+      <div class="cmpenv same">[1] closure (공유)</div>
+    </div>
+    <div class="cmpcol b">
+      <h4>b.greet() 의 체인</h4>
+      <div class="cmpenv diff">[3] 본문</div>
+      <div class="cmparr">↓</div>
+      <div class="cmpenv diff">[2] bind · <span style="color:var(--purple)">this = b</span></div>
+      <div class="cmparr">↓</div>
+      <div class="cmpenv same">[1] closure (공유)</div>
+    </div>
+  </div>
+  <p class="muted" style="margin:14px 0 0">[1] closure와 [3] 본문 구조는 동일하다. <b>유일한 차이는 [2] bind 환경의 <code>this</code> 값</b>.
+  메서드 객체조차 원본은 하나고, bind가 매 호출마다 <code>this</code>만 다른 복사본을 찍어낸다.</p>
+</div>
+
+<!-- prereq -->
+<h2>④ 코드 한 줄씩 어디서 일어나나</h2>
+<table>
+  <tr><th style="width:230px">코드</th><th>역할</th></tr>
+  <tr><td><code>Interpreter.visitGetExpr</code></td><td><code>a.greet</code>의 <code>a</code>를 평가해 LoxInstance를 얻고 <code>get("greet")</code> 호출</td></tr>
+  <tr><td><code>LoxInstance.get</code></td><td>필드에 없으면 <code>clazz.findMethod</code>로 <b>공유 메서드</b>를 찾아 <code>method.bind(this)</code> 반환</td></tr>
+  <tr><td><code>LoxFunction.bind</code></td><td><code>new Environment(closure)</code> + <code>define("this", inst)</code> → closure만 교체한 <b>새 LoxFunction</b></td></tr>
+  <tr><td><code>LoxFunction.call</code></td><td>본문용 <code>Environment(closure=bind환경)</code> 생성 → <code>this</code>가 본문보다 한 칸 바깥에 위치</td></tr>
+  <tr><td><code>Interpreter.visitThisExpr</code><br>→ <code>lookUpVariable</code> → <code>getAt</code></td><td>Resolver가 계산한 거리만큼 체인을 올라가 <code>this</code>(=리시버) 획득</td></tr>
+</table>
+
+<h2>⑤ 다른 언어와 같은 패턴</h2>
+<div class="cards">
+  <div class="card"><b>Python</b><br><span class="muted"><code>a.greet</code>는 bound method 생성 — <code>self</code>가 미리 묶인 함수. 정확히 같은 발상.</span></div>
+  <div class="card"><b>JavaScript</b><br><span class="muted"><code>fn.bind(obj)</code> → <code>this</code> 고정된 새 함수. 이름까지 동일.</span></div>
+  <div class="card"><b>핵심 일반화</b><br><span class="muted">"메서드 = 리시버가 묶인 함수". Lox는 이를 <b>환경에 변수 하나 끼우기</b>로 구현.</span></div>
+</div>
+
+</div>
+
+<script>
+const recvData = {
+  a:{label:'a', name:'"A"', inst:'inst-a', cls:'', color:'var(--primary)'},
+  b:{label:'b', name:'"B"', inst:'inst-b', cls:'b', color:'var(--pink)'}
+};
+let recv='a';
+
+const steps=[
+  { n:"STEP 1", t:"a.greet 읽기 — visitGetExpr",
+    html:'점 왼쪽 <code>R</code>를 평가해 <span class="key">LoxInstance R</span>를 얻고, 그 위에서 <span class="key">get("greet")</span>를 호출합니다.',
+    show:["env-closure"], flash:[], inst:true },
+  { n:"STEP 2", t:"get() — 공유 메서드를 찾는다",
+    html:'<code>R</code>의 필드엔 greet가 없으니, <span class="key">clazz.findMethod("greet")</span>로 <b>클래스가 가진 단 하나의 메서드</b>를 가져옵니다. 아직 this는 없습니다.',
+    show:["env-closure"], flashMethod:true, inst:true },
+  { n:"STEP 3", t:"bind(R) — this 담은 환경을 끼운다 ★",
+    html:'<span class="key">method.bind(R)</span>: closure를 부모로 하는 <span class="key">새 환경[2]</span>에 <code><span style="color:var(--purple)">"this" = R</span></code>를 정의하고, 이 환경을 closure로 갖는 <b>새 LoxFunction</b>을 반환합니다. <b>이게 연결의 전부.</b>',
+    show:["env-closure","env-bind","arr-bind"], flash:["env-bind"], inst:true },
+  { n:"STEP 4", t:"call() — 본문 환경이 위에 쌓인다",
+    html:'반환된 함수의 <span class="key">call()</span>이 본문용 <span class="key">환경[3]</span>을 또 만듭니다(이 메서드는 파라미터 없음). 부모는 방금 만든 bind 환경[2] — 그래서 <code>this</code>는 본문보다 <b>딱 한 칸 바깥</b>.',
+    show:["env-closure","env-bind","arr-bind","env-body","arr-body"], flash:["env-body"], inst:true },
+  { n:"STEP 5", t:"this.name — 체인을 올라가 조회 후 출력",
+    html:'<span class="key">getAt(dist,"this")</span>로 본문[3]→bind[2]를 거슬러 올라가 <code>this</code>(=R)를 찾고, <code>R.name</code>을 읽어 출력합니다. <b>this 조회 = 변수 조회</b>였던 것!',
+    show:["env-closure","env-bind","arr-bind","env-body","arr-body"], chain:true, inst:true, result:true }
+];
+
+let cur=0;
+const dotsEl=document.getElementById('dots');
+dotsEl.innerHTML=steps.map(()=>'<span></span>').join('');
+
+function setRecv(r){
+  recv=r;
+  document.getElementById('rA').classList.toggle('on', r==='a');
+  document.getElementById('rB').classList.toggle('on', r==='b');
+  cur=0; render();
+}
+
+function clearFx(){
+  document.querySelectorAll('.envbox').forEach(e=>e.classList.remove('flash','found'));
+  document.querySelectorAll('.inst').forEach(e=>e.classList.remove('flash'));
+  document.getElementById('method').classList.remove('flash');
+  document.querySelectorAll('.codebox .ln').forEach(e=>e.classList.remove('active'));
+}
+
+function render(){
+  clearFx();
+  const R=recvData[recv];
+  document.getElementById('thisVal').textContent='→ '+R.label;
+  document.getElementById('thisVal').style.color=R.color;
+  // dots
+  [...dotsEl.children].forEach((d,i)=>d.classList.toggle('on', i<cur));
+  // active receiver highlight
+  document.getElementById('inst-a').classList.toggle('active', recv==='a');
+  document.getElementById('inst-b').classList.toggle('active', recv==='b');
+
+  if(cur===0){
+    document.querySelectorAll('.envbox,.enc').forEach(e=>e.classList.remove('show'));
+    document.getElementById('env-closure'); // closure hidden until step1
+    document.getElementById('result').textContent='';
+    document.getElementById('narr').innerHTML='<span class="stepnum">START</span><h4>준비됨 — 리시버: <span style="color:'+R.color+'">'+R.label+'</span></h4><p>오른쪽 위 토글로 <b>a / b</b>를 고르고 <b>다음 단계</b>를 눌러 <code>'+R.label+'.greet()</code> 호출을 따라가세요.</p>';
+    document.getElementById('nextBtn').disabled=false;
+    document.getElementById('nextBtn').textContent='▶ 다음 단계';
+    return;
+  }
+  const s=steps[cur-1];
+  ["env-closure","env-bind","env-body","arr-bind","arr-body"].forEach(id=>{
+    document.getElementById(id).classList.toggle('show', s.show.includes(id));
+  });
+  document.querySelectorAll('.codebox .ln[data-s="'+cur+'"]').forEach(e=>e.classList.add('active'));
+  (s.flash||[]).forEach(id=>document.getElementById(id).classList.add('flash'));
+  if(s.flashMethod) document.getElementById('method').classList.add('flash');
+  if(s.inst) document.getElementById(R.inst).classList.add('flash');
+
+  // narration with R substituted
+  document.getElementById('narr').innerHTML='<span class="stepnum">'+s.n+'</span><h4>'+s.t.replace('a.greet', R.label+'.greet')+'</h4><p>'+s.html.replace(/\bR\b/g, R.label)+'</p>';
+
+  document.getElementById('result').textContent='';
+  if(s.chain){
+    const seq=['env-body','env-bind'];
+    seq.forEach((id,i)=>setTimeout(()=>{
+      document.getElementById('env-body').classList.remove('found');
+      document.getElementById(id).classList.add(i===seq.length-1?'found':'flash');
+    },250+i*480));
+    setTimeout(()=>document.getElementById(R.inst).classList.add('flash'),250+seq.length*480);
+  }
+  if(s.result){
+    setTimeout(()=>{
+      const out=document.getElementById('result');
+      out.innerHTML='<span style="color:var(--muted)">출력 ▸ </span><span style="color:'+R.color+';font-weight:700">'+R.name.replace(/"/g,'')+'</span>';
+    },1400);
+  }
+
+  document.getElementById('nextBtn').disabled=(cur===steps.length);
+  document.getElementById('nextBtn').textContent=(cur===steps.length)?'완료 ✓':'▶ 다음 단계';
+}
+
+function next(){ if(cur<steps.length){ cur++; render(); } }
+function reset(){ cur=0; render(); }
+render();
+</script>
+</body>
+</html>

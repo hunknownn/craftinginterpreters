@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>this + distance — 생성·계산·사용 흐름</title>
+<style>
+:root{
+  --bg:#0f1117;--panel:#1a1d27;--panel2:#222634;--border:#2a2f3d;
+  --primary:#4f9cff;--accent:#ffb454;--ok:#3ddc97;--danger:#ff6b6b;
+  --purple:#b48cff;--cyan:#5fd0e0;--text:#e4e7ee;--muted:#8b93a7;
+  --mono:"SF Mono",Menlo,monospace;
+}
+*{box-sizing:border-box;}
+body{margin:0;background:var(--bg);color:var(--text);line-height:1.6;
+  font-family:-apple-system,"Segoe UI","Apple SD Gothic Neo",sans-serif;}
+.wrap{max-width:1180px;margin:0 auto;padding:30px 20px 90px;}
+header h1{font-size:26px;margin:0 0 6px;}
+header p.sub{color:var(--muted);margin:0 0 22px;font-size:15px;}
+h2{font-size:20px;margin:34px 0 12px;border-left:3px solid var(--primary);padding-left:10px;}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px;}
+.muted{color:var(--muted);} code,.mono{font-family:var(--mono);}
+.kw{color:#ff7b9c;}.ty{color:#6fdcff;}.st{color:#9be29b;}.cm{color:#6b7280;}.fn{color:#ffd28a;}
+
+.codebox{background:#0b0d13;border:1px solid var(--border);border-radius:12px;padding:14px;font-family:var(--mono);font-size:13px;overflow:auto;}
+.codebox .ln{display:block;padding:2px 6px;border-radius:4px;white-space:pre;transition:background .3s;}
+.codebox .ln.active{background:rgba(79,156,255,.18);box-shadow:inset 3px 0 0 var(--primary);}
+
+.controls{display:flex;gap:10px;flex-wrap:wrap;margin:16px 0;align-items:center;}
+button{background:var(--primary);color:#04122a;border:none;border-radius:9px;padding:10px 16px;font-size:14px;font-weight:700;cursor:pointer;transition:filter .15s,transform .05s;}
+button:hover{filter:brightness(1.1);}button:active{transform:translateY(1px);}
+button.ghost{background:var(--panel2);color:var(--text);border:1px solid var(--border);}
+button:disabled{opacity:.4;cursor:not-allowed;}
+.stepdot{display:flex;gap:6px;margin-left:auto;}
+.stepdot span{width:9px;height:9px;border-radius:50%;background:var(--border);}
+.stepdot span.on{background:var(--primary);} .stepdot span.on.rt{background:var(--accent);}
+.phasetag{font-family:var(--mono);font-size:12px;padding:3px 10px;border-radius:20px;border:1px solid var(--border);color:var(--muted);}
+.phasetag.ct{border-color:var(--primary);color:var(--primary);}
+.phasetag.rt{border-color:var(--accent);color:var(--accent);}
+
+.narr{background:var(--panel2);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:8px;padding:14px 16px;min-height:80px;}
+.narr .stepnum{font-weight:700;font-size:13px;}
+.narr h4{margin:4px 0 6px;font-size:16px;} .narr p{margin:0;font-size:14px;}
+.narr .key{color:var(--accent);font-weight:700;}
+
+/* 3-col: resolver | bridge | interpreter */
+.stage{display:grid;grid-template-columns:1fr 150px 1fr;gap:14px;margin-top:16px;align-items:stretch;}
+@media(max-width:920px){.stage{grid-template-columns:1fr;}}
+.side{border:1px solid var(--border);border-radius:14px;padding:16px;background:var(--panel);transition:box-shadow .3s,border-color .3s;}
+.side.dim{opacity:.45;}
+.side.live.ct{border-color:var(--primary);box-shadow:0 0 0 2px rgba(79,156,255,.2);}
+.side.live.rt{border-color:var(--accent);box-shadow:0 0 0 2px rgba(255,180,84,.2);}
+.side h3{margin:0 0 4px;font-size:15px;}
+.side .ph{font-size:11px;color:var(--muted);margin-bottom:12px;}
+.side.ct h3{color:var(--primary);} .side.rt h3{color:var(--accent);}
+
+/* stacks */
+.stack{display:flex;flex-direction:column;gap:0;align-items:center;}
+.frame{width:100%;border:2px solid var(--border);border-radius:10px;padding:9px 12px;background:var(--panel2);opacity:.22;transform:translateY(8px);transition:all .42s cubic-bezier(.2,.8,.2,1);}
+.frame.show{opacity:1;transform:translateY(0);}
+.frame.flash{border-color:var(--accent);box-shadow:0 0 0 3px rgba(255,180,84,.28);}
+.frame.found{border-color:var(--ok);box-shadow:0 0 0 3px rgba(61,220,151,.35);}
+.frame.miss{border-color:var(--danger);box-shadow:0 0 0 3px rgba(255,107,107,.25);}
+.frame .ft{font-size:11px;font-weight:700;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;}
+.frame .ft .tag{color:var(--muted);font-weight:500;}
+.frame .hop{font-family:var(--mono);font-size:10px;color:var(--cyan);border:1px solid rgba(95,208,224,.4);border-radius:6px;padding:0 6px;}
+.bind{font-family:var(--mono);font-size:12.5px;padding:3px 8px;border-radius:6px;background:#0b0d13;margin:2px 0;}
+.bind.this-b{background:rgba(180,140,255,.13);border:1px solid rgba(180,140,255,.45);}
+.bind.this-b .bn{color:var(--purple);font-weight:700;}
+.bind .bn{color:var(--accent);} .bind .bv{color:var(--ok);}
+.enc{color:var(--muted);font-size:16px;margin:1px 0;opacity:.22;transition:opacity .42s;}
+.enc.show{opacity:1;} .enc small{font-size:10px;}
+
+/* bridge */
+.bridge{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;}
+.distbadge{font-family:var(--mono);font-weight:800;font-size:15px;border-radius:14px;padding:14px 10px;text-align:center;width:100%;
+  border:2px dashed var(--border);color:var(--muted);transition:all .4s;}
+.distbadge.set{border-style:solid;border-color:var(--cyan);color:var(--cyan);box-shadow:0 0 0 3px rgba(95,208,224,.18);}
+.distbadge .big{display:block;font-size:34px;line-height:1.1;margin-top:4px;}
+.bridge .arrowdown{font-size:22px;color:var(--cyan);opacity:.3;transition:opacity .4s;}
+.bridge .arrowdown.on{opacity:1;}
+.bridge .lbl{font-size:11px;color:var(--muted);text-align:center;}
+
+.result{margin-top:10px;font-family:var(--mono);font-size:14px;min-height:22px;}
+
+.keymsg{background:linear-gradient(135deg,rgba(95,208,224,.1),rgba(180,140,255,.1));border:1px solid rgba(95,208,224,.32);border-radius:14px;padding:18px 20px;margin:26px 0;}
+.keymsg b{color:var(--cyan);}
+table{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:8px;}
+th,td{border:1px solid var(--border);padding:9px 12px;text-align:left;}
+th{background:var(--panel2);color:var(--accent);}
+.mini{font-size:12px;color:var(--muted);}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>📏 <span style="color:var(--cyan)">distance</span>로 잇는 <span style="color:var(--purple)">this</span> — 계산(컴파일타임) → 사용(런타임)</h1>
+  <p class="sub">Resolver가 "this까지 몇 칸"을 미리 세고(<code>dist</code>), Interpreter가 그 숫자로 환경 체인을 정확히 거슬러 올라간다</p>
+</header>
+
+<div class="panel">
+  <div class="codebox" id="code">
+<span class="ln" data-s="r1"><span class="kw">class</span> <span class="ty">Greeter</span> {</span>
+<span class="ln" data-s="r2">  <span class="fn">greet</span>() {</span>
+<span class="ln" data-s="r3">    <span class="kw">print</span> <span class="kw">this</span>.name;</span>
+<span class="ln">  }</span>
+<span class="ln">}</span>
+<span class="ln" data-s="rt">var a = <span class="ty">Greeter</span>(); a.name = <span class="st">"A"</span>;  a.<span class="fn">greet</span>();</span>
+  </div>
+</div>
+
+<div class="controls">
+  <button id="nextBtn" onclick="next()">▶ 다음 단계</button>
+  <button class="ghost" onclick="reset()">↺ 처음으로</button>
+  <span class="phasetag" id="phaseTag">시작 전</span>
+  <div class="stepdot" id="dots"></div>
+</div>
+
+<div class="narr" id="narr"></div>
+
+<div class="stage">
+  <!-- RESOLVER -->
+  <div class="side ct" id="sideCT">
+    <h3>① Resolver</h3>
+    <div class="ph">컴파일타임 · 스코프 스택 — 거리를 <b>계산</b></div>
+    <div class="stack" id="rstack">
+      <div class="frame" id="r-method">
+        <div class="ft">method scope <span class="hop" id="hop-method">hop 0</span></div>
+        <div class="bind"><span class="muted">(greet 파라미터 없음)</span></div>
+      </div>
+      <div class="enc" id="r-arr">↓ <small>상위 스코프</small></div>
+      <div class="frame" id="r-class">
+        <div class="ft">class scope <span class="hop" id="hop-class">hop 1</span></div>
+        <div class="bind this-b"><span class="bn">"this"</span> ✓ 정의됨</div>
+      </div>
+    </div>
+    <div class="mini" style="margin-top:10px">resolveLocal: 안쪽부터 <code>"this"</code> 가진 스코프를 찾고, 건너뛴 칸 수 = distance</div>
+  </div>
+
+  <!-- BRIDGE -->
+  <div class="bridge">
+    <div class="distbadge" id="distBadge">dist<span class="big" id="distNum">?</span></div>
+    <div class="arrowdown" id="bridgeArrow">↓</div>
+    <div class="lbl" id="bridgeLbl">locals 맵에 저장</div>
+  </div>
+
+  <!-- INTERPRETER -->
+  <div class="side rt dim" id="sideRT">
+    <h3>② Interpreter</h3>
+    <div class="ph">런타임 · 환경 체인 — 거리를 <b>사용</b></div>
+    <div class="stack" id="estack">
+      <div class="frame" id="e-body">
+        <div class="ft">[0] 본문 env <span class="hop">getAt 시작</span></div>
+        <div class="bind"><span class="muted">(파라미터 없음)</span></div>
+      </div>
+      <div class="enc" id="e-arr1">↓ <small>enclosing</small></div>
+      <div class="frame" id="e-bind">
+        <div class="ft">[1] bind env <span class="tag">bind()</span></div>
+        <div class="bind this-b"><span class="bn">this</span> = <span class="bv">→ a</span></div>
+      </div>
+      <div class="enc" id="e-arr2">↓ <small>enclosing</small></div>
+      <div class="frame" id="e-closure">
+        <div class="ft">[2] closure</div>
+        <div class="bind"><span class="bn">Greeter</span> = <span class="bv">LoxClass</span></div>
+      </div>
+    </div>
+    <div class="result" id="result"></div>
+  </div>
+</div>
+
+<div class="keymsg">
+  <div style="font-size:13px;color:var(--muted);margin-bottom:6px">왜 두 스택이 같은 모양인가</div>
+  <p style="margin:0;font-size:15.5px">Resolver의 <span style="color:var(--primary)">스코프 스택</span>과 Interpreter의 <span style="color:var(--accent)">환경 체인</span>은
+  <b>똑같은 중첩 구조</b>로 만들어진다(class scope ↔ bind env, method scope ↔ 본문 env).
+  그래서 컴파일타임에 센 <b><span style="color:var(--cyan)">dist=1</span></b>이 런타임에서 <b>그대로 hop 수</b>가 된다 —
+  실행할 때 이름으로 헤매며 찾지 않고 <code>getAt(1,"this")</code>로 <b>한 번에 정확히</b> 도달한다.</p>
+</div>
+
+<h2>코드 매핑</h2>
+<table>
+  <tr><th style="width:120px">단계</th><th>코드</th><th>하는 일</th></tr>
+  <tr><td>생성</td><td><code>Resolver.visitClassStmt</code></td><td><code>beginScope</code> 후 <code>scopes.peek().put("this", true)</code> — this 자리 마련</td></tr>
+  <tr><td>계산</td><td><code>Resolver.visitThisExpr</code> → <code>resolveLocal</code></td><td>안쪽 스코프부터 <code>"this"</code> 탐색 → distance 계산 → <code>interpreter.resolve(expr, dist)</code></td></tr>
+  <tr><td>저장</td><td><code>locals: Map&lt;Expr,Integer&gt;</code></td><td>이 <code>This</code> 노드 → <code>dist</code> 기록</td></tr>
+  <tr><td>사용</td><td><code>Interpreter.visitThisExpr</code> → <code>lookUpVariable</code></td><td><code>locals.get(expr)</code>로 dist 꺼내 <code>environment.getAt(dist,"this")</code></td></tr>
+</table>
+<p class="mini">참고: <code>bind</code>는 런타임에 <code>this</code> 값을 환경에 넣는 쪽(쓰기). Resolver는 그 환경이 <b>몇 칸 위일지</b>를 미리 아는 쪽(주소 계산).</p>
+
+</div>
+
+<script>
+const steps=[
+  { ph:'ct', n:"R-1", t:"class 진입 → this 자리 만들기",
+    code:'r1',
+    html:'<span class="key">visitClassStmt</span>: 새 스코프를 열고 <code>scopes.peek().put("this", true)</code>로 <b>class scope에 "this"를 미리 정의</b>한다. 아직 값은 없고 "여기 this가 있다"는 표시만.',
+    rshow:['r-class'], flash:['r-class'] },
+  { ph:'ct', n:"R-2", t:"greet 메서드 스코프 열기",
+    code:'r2',
+    html:'<span class="key">resolveFunction(greet)</span>: 메서드용 스코프를 그 위에 또 연다(파라미터 자리). 이제 스택은 <b>method ↑ class</b> 2겹.',
+    rshow:['r-class','r-arr','r-method'], flash:['r-method'] },
+  { ph:'ct', n:"R-3", t:"this 만남 → resolveLocal 탐색",
+    code:'r3',
+    html:'본문에서 <code>this</code>를 만나 <span class="key">visitThisExpr → resolveLocal</span>. <b>가장 안쪽(method)부터</b> "this" 가진 스코프를 찾아 내려간다. method엔 없음(hop 0 실패), class엔 있음(hop 1 성공).',
+    rshow:['r-class','r-arr','r-method'], scan:true },
+  { ph:'ct', n:"R-4", t:"distance = 1 계산 → locals에 저장",
+    code:'r3',
+    html:'method를 건너뛰고 class에서 찾았으니 <b><span style="color:var(--cyan)">건너뛴 칸 = 1</span></b>. 이 <code>This</code> 노드에 대해 <code>resolve(expr, <b>1</b>)</code> → <span class="key">locals 맵에 dist=1 저장</span>. 컴파일타임의 일은 여기서 끝.',
+    rshow:['r-class','r-arr','r-method'], setDist:1 },
+
+  { ph:'rt', n:"E-1", t:"런타임: a.greet() 호출 → 환경 체인 생성",
+    code:'rt',
+    html:'실행 시점. <code>a.greet</code>가 메서드를 <code>a</code>에 bind → <span class="key">[1] bind env(this=a)</span>가 생기고, call이 <span class="key">[0] 본문 env</span>를 그 위에 쌓는다. Resolver 스택과 <b>같은 모양</b>인 걸 보라.',
+    eshow:['e-closure','e-arr2','e-bind','e-arr1','e-body'], flashE:['e-body','e-bind'] },
+  { ph:'rt', n:"E-2", t:"visitThisExpr → locals에서 dist 꺼내기",
+    code:'rt',
+    html:'<code>this</code> 평가 → <span class="key">lookUpVariable</span>가 <code>locals.get(thisExpr)</code>로 아까 저장한 <b><span style="color:var(--cyan)">dist=1</span></b>을 꺼낸다. 이 숫자가 다리를 건너 런타임으로 넘어온다.',
+    eshow:['e-closure','e-arr2','e-bind','e-arr1','e-body'], useDist:true },
+  { ph:'rt', n:"E-3", t:"getAt(1, \"this\") → 정확히 1칸 위",
+    code:'rt',
+    html:'<span class="key">environment.getAt(1,"this")</span>: 본문[0]에서 <b>딱 1칸</b> 올라가 bind env[1]에 도착 → <code>this</code>=a 획득. 헤매지 않고 한 번에. 이어서 <code>a.name</code> → 출력.',
+    eshow:['e-closure','e-arr2','e-bind','e-arr1','e-body'], hop:true, result:true }
+];
+
+let cur=0;
+const dotsEl=document.getElementById('dots');
+dotsEl.innerHTML=steps.map(s=>'<span class="'+(s.ph==='rt'?'rt':'')+'"></span>').join('');
+
+function clearFx(){
+  document.querySelectorAll('.frame').forEach(e=>e.classList.remove('flash','found','miss'));
+  document.querySelectorAll('.codebox .ln').forEach(e=>e.classList.remove('active'));
+}
+const $=id=>document.getElementById(id);
+
+function render(){
+  clearFx();
+  [...dotsEl.children].forEach((d,i)=>d.classList.toggle('on', i<cur));
+
+  if(cur===0){
+    document.querySelectorAll('.frame,.enc').forEach(e=>e.classList.remove('show'));
+    $('sideCT').classList.remove('live'); $('sideCT').classList.add('dim');
+    $('sideRT').classList.remove('live'); $('sideRT').classList.add('dim');
+    $('distBadge').classList.remove('set'); $('distNum').textContent='?';
+    $('bridgeArrow').classList.remove('on'); $('bridgeLbl').textContent='locals 맵에 저장';
+    $('result').textContent=''; $('phaseTag').textContent='시작 전'; $('phaseTag').className='phasetag';
+    $('narr').innerHTML='<span class="stepnum">START</span><h4>준비됨</h4><p><b>다음 단계</b>를 눌러 ① Resolver가 dist를 <b>계산</b>하고 ② Interpreter가 그걸 <b>사용</b>하는 흐름을 따라가세요.</p>';
+    $('nextBtn').disabled=false; $('nextBtn').textContent='▶ 다음 단계';
+    return;
+  }
+  const s=steps[cur-1];
+
+  // phase highlight
+  $('phaseTag').textContent = s.ph==='ct' ? '① 컴파일타임 (Resolver)' : '② 런타임 (Interpreter)';
+  $('phaseTag').className = 'phasetag '+s.ph;
+  $('sideCT').classList.toggle('dim', s.ph!=='ct' && cur<5 ? false : s.ph!=='ct');
+  $('sideCT').classList.toggle('live', s.ph==='ct');
+  $('sideRT').classList.toggle('dim', s.ph!=='rt');
+  $('sideRT').classList.toggle('live', s.ph==='rt');
+  // once RT begins keep CT visible but not dim-collapsed
+  if(s.ph==='rt'){ $('sideCT').classList.remove('dim'); }
+
+  // frames visibility
+  (s.rshow||[]).forEach(id=>$(id).classList.add('show'));
+  (s.eshow||[]).forEach(id=>$(id).classList.add('show'));
+
+  // code
+  document.querySelectorAll('.codebox .ln[data-s="'+s.code+'"]').forEach(e=>e.classList.add('active'));
+  (s.flash||[]).forEach(id=>$(id).classList.add('flash'));
+  (s.flashE||[]).forEach(id=>$(id).classList.add('flash'));
+
+  // narration
+  $('narr').innerHTML='<span class="stepnum" style="color:'+(s.ph==='rt'?'var(--accent)':'var(--primary)')+'">'+s.n+'</span><h4>'+s.t+'</h4><p>'+s.html+'</p>';
+
+  // dist badge state
+  if(cur>=5){ $('distBadge').classList.add('set'); $('distNum').textContent='1'; $('bridgeArrow').classList.add('on'); }
+  else if(s.setDist!==undefined){ /* set during animation below */ }
+  $('result').textContent='';
+
+  // animations
+  if(s.scan){
+    setTimeout(()=>$('r-method').classList.add('miss'),250);
+    setTimeout(()=>{ $('r-method').classList.remove('miss'); $('r-class').classList.add('found'); },900);
+  }
+  if(s.setDist!==undefined){
+    $('r-class').classList.add('found');
+    setTimeout(()=>{ $('distBadge').classList.add('set'); $('distNum').textContent=s.setDist; $('bridgeArrow').classList.add('on'); },500);
+  }
+  if(s.useDist){
+    $('distBadge').classList.add('set');
+    $('bridgeLbl').textContent='lookUpVariable 이 읽음';
+  }
+  if(s.hop){
+    const seq=['e-body','e-bind'];
+    seq.forEach((id,i)=>setTimeout(()=>{
+      $('e-body').classList.remove('found');
+      $(id).classList.add(i===seq.length-1?'found':'flash');
+    },250+i*520));
+  }
+  if(s.result){
+    setTimeout(()=>{ $('result').innerHTML='<span class="muted">출력 ▸ </span><span style="color:var(--accent);font-weight:700">A</span>'; },1500);
+  }
+
+  $('nextBtn').disabled=(cur===steps.length);
+  $('nextBtn').textContent=(cur===steps.length)?'완료 ✓':'▶ 다음 단계';
+}
+function next(){ if(cur<steps.length){ cur++; render(); } }
+function reset(){ cur=0; render(); }
+render();
+</script>
+</body>
+</html>

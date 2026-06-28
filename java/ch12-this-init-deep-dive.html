@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ch12 심화 — this & init</title>
+<style>
+:root{
+  --bg:#0f1117; --panel:#1a1d27; --panel2:#222634; --border:#2a2f3d;
+  --primary:#4f9cff; --accent:#ffb454; --ok:#3ddc97; --danger:#ff6b6b;
+  --purple:#b48cff; --text:#e4e7ee; --muted:#8b93a7;
+}
+*{box-sizing:border-box;}
+body{margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,"Segoe UI","Apple SD Gothic Neo",sans-serif; line-height:1.65;}
+code,.mono{font-family:"SF Mono",Menlo,monospace;}
+.wrap{max-width:920px; margin:0 auto; padding:30px 22px 90px;}
+
+.back{display:inline-block; text-decoration:none; color:var(--muted); font-size:14px; margin-bottom:18px; border:1px solid var(--border); border-radius:8px; padding:6px 12px;}
+.back:hover{color:var(--primary); border-color:var(--primary);}
+
+header h1{font-size:30px; margin:0 0 8px;}
+header .sub{color:var(--muted); font-size:16px; margin:0 0 12px;}
+.pp{color:var(--purple);} .acc{color:var(--accent);} .ok{color:var(--ok);} .dg{color:var(--danger);} .muted{color:var(--muted);}
+
+h2{font-size:22px; margin:44px 0 14px; border-left:4px solid var(--purple); padding-left:12px;}
+h3{font-size:17px; margin:22px 0 8px; color:var(--accent);}
+p,li{font-size:16px;} ul{padding-left:22px;} li{margin:6px 0;}
+
+.codebox{background:#0b0d13; border:1px solid var(--border); border-radius:12px; padding:16px 18px; font-family:"SF Mono",Menlo,monospace; font-size:13.5px; overflow:auto; white-space:pre; margin:14px 0;}
+.kw{color:#ff7b9c;} .ty{color:#6fdcff;} .st{color:#9be29b;} .cm{color:#6b7280;} .fn{color:#ffd28a;} .nm{color:#ffb454;}
+
+.panel{background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:18px 20px; margin:14px 0;}
+.note{border-left:3px solid var(--accent); background:rgba(255,180,84,.08); padding:12px 16px; border-radius:0 8px 8px 0; margin:16px 0;}
+.warn{border-left:3px solid var(--danger); background:rgba(255,107,107,.08); padding:12px 16px; border-radius:0 8px 8px 0; margin:16px 0;}
+.key{border-left:3px solid var(--purple); background:rgba(180,140,255,.1); padding:12px 16px; border-radius:0 8px 8px 0; margin:16px 0;}
+
+/* env chain visual */
+.chain{display:flex; flex-direction:column; align-items:center; gap:0; margin:20px 0;}
+.env{width:100%; max-width:420px; border:2px solid var(--border); border-radius:10px; padding:12px 14px; background:var(--panel2);}
+.env.this{border-color:var(--purple); box-shadow:0 0 0 3px rgba(180,140,255,.15);}
+.env.found{border-color:var(--ok); box-shadow:0 0 0 3px rgba(61,220,151,.2);}
+.env .t{font-size:12px; font-weight:700; letter-spacing:.3px; margin-bottom:8px; display:flex; justify-content:space-between; color:var(--muted);}
+.bind{font-family:"SF Mono",Menlo,monospace; font-size:13px; padding:3px 9px; border-radius:6px; background:#0b0d13; margin:3px 0;}
+.bind .n{color:var(--accent);} .bind .v{color:var(--ok);}
+.bind.thisb{background:rgba(180,140,255,.14); border:1px solid rgba(180,140,255,.4);}
+.bind.thisb .n{color:var(--purple);}
+.up{color:var(--muted); font-size:20px; line-height:1; margin:3px 0;}
+
+.steps{counter-reset:s;}
+.step{position:relative; padding:10px 0 10px 44px; border-left:2px solid var(--border); margin-left:14px;}
+.step::before{counter-increment:s; content:counter(s); position:absolute; left:-15px; top:8px; width:28px; height:28px; border-radius:50%; background:var(--purple); color:#0b0d13; font-weight:700; display:flex; align-items:center; justify-content:center; font-size:14px;}
+
+table{width:100%; border-collapse:collapse; margin:14px 0; font-size:14px;}
+th,td{border:1px solid var(--border); padding:9px 12px; text-align:left;}
+th{background:var(--panel2); color:var(--accent);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="ch12-classes-slides.html">‹ 메인 발표자료로 돌아가기</a>
+
+  <header>
+    <h1>심화 — <span class="pp">this</span> &amp; <span class="pp">init</span></h1>
+    <p class="sub">ch12에서 제일 헷갈리는 두 가지를, 환경 체인으로 끝까지 분해한다</p>
+  </header>
+
+  <div class="key">
+    <b>한 줄 요약</b><br>
+    · <span class="pp">this</span> = 메서드를 인스턴스에 <b>bind</b> 할 때 환경에 몰래 심는 변수<br>
+    · <span class="pp">init</span> = 호출 후 <b>항상 this를 반환</b>하도록 특별 취급되는 메서드
+  </div>
+
+  <!-- ============ PART 1: this ============ -->
+  <h2>PART 1. this 는 어디서 오는가</h2>
+
+  <p>가장 먼저 풀어야 할 질문: 메서드 본문의 <code>this</code>는 <b>어느 인스턴스</b>를 가리키나?
+  답은 — 메서드를 <b>꺼내는 순간(get)</b> 그 인스턴스로 고정된다.</p>
+
+  <h3>문제: 메서드는 클래스가 소유한다</h3>
+  <div class="codebox"><span class="kw">class</span> Cake {
+  taste() { print <span class="kw">this</span>.flavor; }   <span class="cm">// this = 어느 케이크?</span>
+}
+<span class="kw">var</span> a = Cake(); a.flavor = <span class="st">"choco"</span>;
+<span class="kw">var</span> b = Cake(); b.flavor = <span class="st">"vanilla"</span>;
+
+a.taste();   <span class="cm">// choco</span>
+b.taste();   <span class="cm">// vanilla   ← 같은 메서드인데 this가 다르다</span></div>
+  <p>메서드 함수 객체는 클래스에 <b>하나만</b> 있다. 그런데 <code>this</code>는 인스턴스마다 달라야 한다. 어떻게?</p>
+
+  <h3>해법: bind() — 인스턴스마다 새 환경을 씌운다</h3>
+  <div class="codebox"><span class="cm">// LoxFunction</span>
+LoxFunction <span class="fn">bind</span>(LoxInstance instance) {
+  Environment environment = <span class="kw">new</span> Environment(closure); <span class="cm">// closure 위에 한 겹</span>
+  environment.define(<span class="st">"this"</span>, instance);                  <span class="cm">// this를 박아넣음</span>
+  <span class="kw">return</span> <span class="kw">new</span> LoxFunction(declaration, environment, isInitializer);
+}</div>
+
+  <p><code>instance.get("taste")</code>가 호출되면 → <code>method.bind(this)</code> 가 불린다.
+  즉 <b>점(.)으로 메서드를 꺼낼 때마다</b> 그 인스턴스의 <code>this</code>가 든 새 LoxFunction이 만들어진다.</p>
+
+  <div class="note"><b>핵심:</b> <code>this</code>는 키워드처럼 보이지만, 구현상으로는 그냥 <span class="acc">"this"라는 이름의 지역 변수</span>다. bind가 그 변수를 정의하는 환경을 만들어줄 뿐.</div>
+
+  <!-- 두 객체 그림 -->
+  <h3>bind는 "원본"을 건드리지 않고 "새 객체"를 만든다</h3>
+  <p><code>closure</code>는 LoxFunction의 <b>인스턴스 필드</b>다. bind는 이 필드를 <span class="pp">this 환경</span>으로 채운
+  <b>별도의 LoxFunction 객체</b>를 새로 만든다. 그래서 같은 메서드인데 객체가 <b>둘</b>이 된다.</p>
+  <div style="display:flex; gap:18px; flex-wrap:wrap; margin:16px 0;">
+    <div style="flex:1; min-width:240px; border:2px solid var(--border); border-radius:12px; padding:16px; background:var(--panel2);">
+      <div style="font-size:12px; font-weight:700; color:var(--muted); margin-bottom:10px;">원본 메서드 객체 <span style="float:right; font-weight:400;">findMethod 결과</span></div>
+      <div class="bind"><span class="n">declaration</span> = taste()</div>
+      <div class="bind"><span class="n">closure</span> = <span class="v">[클래스 정의 환경]</span></div>
+      <div class="bind"><span class="n">isInitializer</span> = false</div>
+      <p class="muted" style="font-size:13px; margin:10px 0 0;">클래스에 <b>하나</b>만 존재 · this 없음</p>
+    </div>
+    <div style="display:flex; align-items:center; color:var(--purple); font-size:24px;">bind→</div>
+    <div style="flex:1; min-width:240px; border:2px solid var(--purple); border-radius:12px; padding:16px; background:var(--panel2); box-shadow:0 0 0 3px rgba(180,140,255,.15);">
+      <div style="font-size:12px; font-weight:700; color:var(--purple); margin-bottom:10px;">바인딩된 객체 <span style="float:right; font-weight:400;">a.taste 결과</span></div>
+      <div class="bind"><span class="n">declaration</span> = taste()</div>
+      <div class="bind thisb"><span class="n">closure</span> = <span class="v">[this=a] 환경</span></div>
+      <div class="bind"><span class="n">isInitializer</span> = false</div>
+      <p class="muted" style="font-size:13px; margin:10px 0 0;">get 할 때마다 <b>새로</b> 생성 · <span class="pp">this 보유</span></p>
+    </div>
+  </div>
+  <div class="key"><b>세팅은 bind, 사용은 call.</b> <code>call()</code>의 <code>new Environment(closure)</code>에서
+  <code>closure</code>는 <span class="acc">자기 객체의 필드</span>다. 바인딩된 객체로 call하면 그 필드가 곧 <code>[this=a]</code> → 자연히 this 환경이 부모로 깔린다.
+  <code>a.taste()</code>와 <code>b.taste()</code>는 <b>declaration·closure 부모는 공유</b>하되 <code>this</code>만 다른 객체다.</div>
+
+  <!-- 환경 체인 시각화 -->
+  <h3>환경 체인 — a.taste() 실행 순간</h3>
+  <div class="chain">
+    <div class="env found">
+      <div class="t"><span>④ 메서드 호출 환경 (call)</span><span>가장 안쪽</span></div>
+      <div class="bind"><span class="muted">(파라미터 없음)</span></div>
+    </div>
+    <div class="up">▲ enclosing</div>
+    <div class="env this">
+      <div class="t"><span>③ bind 환경</span><span>인스턴스별</span></div>
+      <div class="bind thisb"><span class="n">this</span> = <span class="v">Cake#a 인스턴스</span></div>
+    </div>
+    <div class="up">▲ enclosing</div>
+    <div class="env">
+      <div class="t"><span>② closure (클래스 정의 시점)</span><span></span></div>
+      <div class="bind"><span class="n">Cake</span> = <span class="v">LoxClass</span></div>
+    </div>
+    <div class="up">▲ enclosing</div>
+    <div class="env">
+      <div class="t"><span>① global</span><span></span></div>
+      <div class="bind"><span class="n">a, b</span> = <span class="v">...</span></div>
+    </div>
+  </div>
+  <p class="muted">본문에서 <code>this</code>를 찾으면 ④에 없으니 한 칸 올라가 ③에서 <span class="pp">Cake#a</span>를 찾는다.
+  <code>b.taste()</code>면 ③의 this만 <span class="pp">Cake#b</span>로 바뀐다 — 나머지 체인은 공유.</p>
+
+  <h3>Resolver는 this 스코프를 미리 깔아준다</h3>
+  <div class="codebox"><span class="cm">// visitClassStmt</span>
+beginScope();
+scopes.peek().put(<span class="st">"this"</span>, <span class="kw">true</span>);   <span class="cm">// this를 "선언된 변수"로 등록</span>
+
+<span class="kw">for</span> (Stmt.Function method : stmt.methods) {
+  FunctionType decl = method.name.lexeme.equals(<span class="st">"init"</span>)
+      ? INITIALIZER : METHOD;
+  resolveFunction(method, decl);
+}
+endScope();</div>
+  <p>Resolver가 메서드 바깥에 <code>this</code> 스코프를 한 겹 두기 때문에, 본문의 <code>this</code>는
+  <b>"몇 칸 위로 올라가면 된다"</b>는 거리(depth)가 정확히 계산된다. 런타임의 bind 환경과 깊이가 딱 맞물린다.</p>
+
+  <div class="warn"><b>정적 검사:</b> 클래스 밖에서 <code>this</code>를 쓰면
+  <code>currentClass == NONE</code> 이라 <span class="dg">"Can't use 'this' outside of a class."</span> 에러.</div>
+
+  <!-- ============ PART 2: init ============ -->
+  <h2>PART 2. init — 생성자의 특별 규칙</h2>
+
+  <p><code>init</code>은 그냥 <code>init</code>이라는 이름의 메서드일 뿐이지만, <b>3가지 특별 대우</b>를 받는다.</p>
+
+  <table>
+    <tr><th>상황</th><th>일반 메서드</th><th>init</th></tr>
+    <tr><td>클래스 호출 시</td><td>호출 안 됨</td><td class="pp">자동 실행</td></tr>
+    <tr><td>반환값</td><td>return 값 or nil</td><td class="pp">항상 this</td></tr>
+    <tr><td>값을 return하면</td><td>OK</td><td class="dg">컴파일 에러</td></tr>
+  </table>
+
+  <h3>① 클래스 호출 → init 자동 실행</h3>
+  <div class="codebox"><span class="cm">// LoxClass.call()</span>
+LoxInstance instance = <span class="kw">new</span> LoxInstance(<span class="kw">this</span>);
+LoxFunction initializer = findMethod(<span class="st">"init"</span>);
+<span class="kw">if</span> (initializer != <span class="kw">null</span>) {
+  initializer.bind(instance).call(interpreter, arguments);  <span class="cm">// this=새 인스턴스</span>
+}
+<span class="kw">return</span> instance;</div>
+  <p>그래서 <code>arity()</code>(필요 인자 수)도 init의 파라미터 수를 따라간다.</p>
+  <div class="codebox"><span class="kw">public</span> <span class="ty">int</span> <span class="fn">arity</span>() {
+  LoxFunction init = findMethod(<span class="st">"init"</span>);
+  <span class="kw">return</span> init == <span class="kw">null</span> ? <span class="nm">0</span> : init.arity();
+}</div>
+
+  <h3>② init은 무조건 this를 반환한다</h3>
+  <div class="codebox"><span class="cm">// LoxFunction.call()</span>
+<span class="kw">try</span> {
+  interpreter.executeBlock(declaration.body, environment);
+} <span class="kw">catch</span> (Return returnValue) {
+  <span class="kw">if</span> (isInitializer) <span class="kw">return</span> closure.getAt(<span class="nm">0</span>, <span class="st">"this"</span>);  <span class="cm">// 빈 return도 this</span>
+  <span class="kw">return</span> returnValue.value;
+}
+<span class="kw">if</span> (isInitializer) <span class="kw">return</span> closure.getAt(<span class="nm">0</span>, <span class="st">"this"</span>);      <span class="cm">// 정상 종료도 this</span>
+<span class="kw">return</span> <span class="kw">null</span>;</div>
+
+  <div class="key"><b>왜 <code>closure.getAt(0, "this")</code> 인가?</b><br>
+  init의 <code>closure</code>는 곧 bind가 만든 환경(③)이다. 거기서 거리 0(자기 자신)에 <code>this</code>가 있다.
+  그래서 <code>return;</code> 만 써도, 끝까지 흘러도 항상 새 인스턴스가 돌아온다.</div>
+
+  <p>덕분에 이런 코드가 동작한다:</p>
+  <div class="codebox"><span class="kw">var</span> foo = Foo();
+print foo.init();   <span class="cm">// init을 다시 불러도 Foo 인스턴스를 반환</span></div>
+
+  <h3>③ init에서 값 반환은 금지 (Resolver)</h3>
+  <div class="codebox"><span class="cm">// visitReturnStmt</span>
+<span class="kw">if</span> (stmt.value != <span class="kw">null</span>) {
+  <span class="kw">if</span> (currentFunction == INITIALIZER) {
+    Lox.error(stmt.keyword, <span class="st">"Can't return a value from an initializer."</span>);
+  }
+  resolve(stmt.value);
+}</div>
+  <p><code>return;</code>(빈 반환, early-exit용)은 허용. <code>return 값;</code> 만 막는다 — init은 항상 this를 줘야 하므로 다른 값을 주는 건 의미 모순.</p>
+
+  <!-- 흐름 정리 -->
+  <h2>전체 흐름: var b = Breakfast("bacon")</h2>
+  <div class="steps">
+    <div class="step"><code>Breakfast("bacon")</code> → <code>visitCallExpr</code> → <code>LoxClass.call()</code></div>
+    <div class="step">새 <code>LoxInstance</code> 생성</div>
+    <div class="step"><code>findMethod("init")</code> → <code>init.bind(instance)</code> : this가 든 환경 생성</div>
+    <div class="step">bind된 init을 <code>call()</code> : 본문에서 <code>this.meat = "bacon"</code> 실행 → 필드 저장</div>
+    <div class="step">init 끝 → <code>isInitializer</code>라서 <code>this</code>(인스턴스) 반환</div>
+    <div class="step"><code>LoxClass.call()</code>이 최종적으로 인스턴스 반환 → <code>b</code>에 대입</div>
+  </div>
+
+  <!-- bind env 매번 새로 -->
+  <h2>헷갈리기 쉬운 점: bind 환경은 매번 새로 만들어진다</h2>
+  <p><code>bind()</code>는 호출될 때마다 <code>new Environment(closure)</code>로 <b>새 환경</b>을 만든다.
+  그래서 <span class="pp">init의 bind 환경</span>과 이후 <span class="acc">get의 bind 환경</span>은 <b>서로 다른 객체</b>다.</p>
+
+  <div class="codebox"><span class="kw">var</span> b = Breakfast(<span class="st">"bacon"</span>);   <span class="cm">// (1) init.bind(b)   → env_A [this=b]</span>
+b.serve(<span class="st">"you"</span>);                <span class="cm">// (2) serve.bind(b)  → env_B [this=b]</span>
+b.serve(<span class="st">"me"</span>);                 <span class="cm">// (3) serve.bind(b)  → env_C [this=b]</span></div>
+
+  <table>
+    <tr><th>시점</th><th>어떤 bind</th><th>env 객체</th><th>this 값</th></tr>
+    <tr><td>(1) 객체 생성</td><td>init.bind <span class="muted">(call 안)</span></td><td class="pp">env_A</td><td>b</td></tr>
+    <tr><td>(2) serve 호출</td><td>serve.bind <span class="muted">(get)</span></td><td class="pp">env_B</td><td>b</td></tr>
+    <tr><td>(3) serve 또 호출</td><td>serve.bind <span class="muted">(get)</span></td><td class="pp">env_C</td><td>b</td></tr>
+  </table>
+
+  <div class="key"><b>env 상자는 매번 다르지만(<code>env_A ≠ env_B ≠ env_C</code>), 그 안의 <code>this</code>가 가리키는 인스턴스는 같은 b다.</b><br>
+  · 같은 메서드를 두 번 꺼낸 (2)·(3)도 <span class="dg">서로 다른 env</span> — get할 때마다 새 bind라서.<br>
+  · env를 공유할 필요가 없다. <span class="acc">this 값(인스턴스)만 같으면</span> 동작은 동일하고, 호출별 파라미터/지역변수는 오히려 매번 새 환경이라야 안전하게 격리된다.</div>
+
+  <div class="warn"><b>한 줄 답:</b> "init의 bind env == get의 bind env?" → <span class="dg">아니오</span> (다른 객체) · "같은 인스턴스를 가리키나?" → <span class="ok">예</span></div>
+
+  <div class="note"><b>함께 보면 좋은 자료:</b> 같은 폴더의 <code>bind-this-showme.html</code> 은 이 환경 체인을 단계별로 애니메이션으로 보여줍니다.</div>
+
+  <a class="back" href="ch12-classes-slides.html" style="margin-top:24px">‹ 메인 발표자료로 돌아가기</a>
+</div>
+</body>
+</html>

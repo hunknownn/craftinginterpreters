@@ -24,6 +24,7 @@ public class LoxInstance {
         }
 
         LoxFunction method = clazz.findMethod(name.lexeme);
+        // 원본 method가 아니라, [부모=closure + this 지역변수]를 가진 environment를 closure로 삼는 '새 LoxFunction'을 만들어 반환한다
         if(method != null) return method.bind(this);
 
         throw new RuntimeError(name, "Undefined property '" + name.lexeme + "'.");
