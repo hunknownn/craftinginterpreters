@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lox bind() & this — 환경 체인으로 이해하기</title>
+<style>
+:root {
+  --bg: #0f1117; --panel: #1a1d27; --panel2:#222634; --border: #2a2f3d;
+  --primary: #4f9cff; --accent: #ffb454; --ok: #3ddc97; --danger: #ff6b6b;
+  --purple:#b48cff; --text: #e4e7ee; --muted: #8b93a7;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font-family: -apple-system, "Segoe UI", "Apple SD Gothic Neo", sans-serif;
+  line-height: 1.6;
+}
+.wrap { max-width: 1100px; margin: 0 auto; padding: 32px 20px 80px; }
+header h1 { font-size: 28px; margin: 0 0 6px; }
+header p.sub { color: var(--muted); margin: 0 0 28px; font-size: 15px; }
+h2 { font-size: 20px; margin: 40px 0 14px; border-left: 3px solid var(--primary); padding-left: 10px; }
+.panel { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 20px; }
+.muted { color: var(--muted); }
+code, .mono { font-family: "SF Mono", Menlo, monospace; }
+
+/* roadmap */
+.roadmap { display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:center; }
+.rm-node { background:var(--panel2); border:1px solid var(--border); border-radius:10px; padding:10px 14px; font-size:13px; text-align:center; }
+.rm-node b { color:var(--accent); }
+.rm-arrow { color:var(--muted); font-size:20px; }
+
+/* main demo layout */
+.demo { display:grid; grid-template-columns: 1fr 1fr; gap:18px; }
+@media (max-width: 880px){ .demo{ grid-template-columns:1fr; } }
+
+/* code box */
+.codebox { background:#0b0d13; border:1px solid var(--border); border-radius:12px; padding:16px; font-family:"SF Mono", Menlo, monospace; font-size:13px; overflow:auto; }
+.codebox .ln { display:block; padding:2px 6px; border-radius:4px; white-space:pre; transition:background .3s; }
+.codebox .ln.active { background:rgba(79,156,255,.18); box-shadow: inset 3px 0 0 var(--primary); }
+.kw{color:#ff7b9c;} .ty{color:#7 fdfd;} .ty{color:#6fdcff;} .st{color:#9be29b;} .cm{color:#6b7280;} .fn{color:#ffd28a;} .va{color:#e4e7ee;}
+
+/* environment chain stack */
+.envstack { display:flex; flex-direction:column; gap:0; align-items:center; min-height:360px; justify-content:flex-end; }
+.envbox {
+  width:100%; max-width:360px; border:2px solid var(--border); border-radius:10px;
+  padding:12px 14px; background:var(--panel2); position:relative;
+  opacity:.25; transform:translateY(8px); transition:all .45s cubic-bezier(.2,.8,.2,1);
+}
+.envbox.show { opacity:1; transform:translateY(0); }
+.envbox.flash { border-color:var(--accent); box-shadow:0 0 0 3px rgba(255,180,84,.25); }
+.envbox.found { border-color:var(--ok); box-shadow:0 0 0 3px rgba(61,220,151,.3); }
+.envbox .title { font-size:12px; font-weight:700; letter-spacing:.3px; margin-bottom:8px; display:flex; justify-content:space-between; }
+.envbox .title .tag { color:var(--muted); font-weight:500; }
+.binding { font-family:"SF Mono", Menlo, monospace; font-size:13px; padding:3px 8px; border-radius:6px; background:#0b0d13; margin:3px 0; display:flex; gap:6px; }
+.binding .nm { color:var(--accent); }
+.binding .vl { color:var(--ok); }
+.binding.this-b { background:rgba(180,140,255,.12); border:1px solid rgba(180,140,255,.4); }
+.binding.this-b .nm { color:var(--purple); }
+.enc-arrow { color:var(--muted); font-size:18px; line-height:1; margin:2px 0; opacity:.25; transition:opacity .45s; }
+.enc-arrow.show{ opacity:1; }
+.enc-label{ font-size:10px; color:var(--muted); }
+
+/* instance box (heap) */
+.heap { margin-top:14px; }
+.instbox { border:2px dashed var(--purple); border-radius:10px; padding:10px 14px; background:rgba(180,140,255,.07); opacity:.25; transition:all .45s; }
+.instbox.show{ opacity:1; }
+.instbox.flash{ box-shadow:0 0 0 3px rgba(180,140,255,.3); }
+.instbox .title{ font-size:12px; font-weight:700; color:var(--purple); margin-bottom:6px; }
+
+/* controls */
+.controls { display:flex; gap:10px; flex-wrap:wrap; margin:18px 0; align-items:center; }
+button {
+  background:var(--primary); color:#04122a; border:none; border-radius:9px;
+  padding:10px 16px; font-size:14px; font-weight:700; cursor:pointer; transition:filter .15s, transform .05s;
+}
+button:hover{ filter:brightness(1.1); } button:active{ transform:translateY(1px); }
+button.ghost{ background:var(--panel2); color:var(--text); border:1px solid var(--border); }
+button:disabled{ opacity:.4; cursor:not-allowed; }
+.stepdot { display:flex; gap:6px; margin-left:auto; }
+.stepdot span{ width:9px; height:9px; border-radius:50%; background:var(--border); }
+.stepdot span.on{ background:var(--primary); }
+
+/* narration */
+.narr { background:var(--panel2); border:1px solid var(--border); border-left:3px solid var(--accent); border-radius:8px; padding:14px 16px; min-height:80px; }
+.narr .stepnum{ color:var(--accent); font-weight:700; font-size:13px; }
+.narr h4{ margin:4px 0 6px; font-size:16px; }
+.narr p{ margin:0; font-size:14px; color:var(--text); }
+.narr .key{ color:var(--accent); font-weight:700; }
+
+/* prereq cards */
+.cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; }
+.card { background:var(--panel2); border:1px solid var(--border); border-radius:10px; padding:14px; }
+.card b{ color:var(--primary); }
+
+/* table */
+table { width:100%; border-collapse:collapse; margin-top:10px; font-size:14px; }
+th,td{ border:1px solid var(--border); padding:9px 12px; text-align:left; }
+th{ background:var(--panel2); color:var(--accent); }
+
+.keymsg { background:linear-gradient(135deg, rgba(180,140,255,.12), rgba(79,156,255,.10)); border:1px solid rgba(180,140,255,.35); border-radius:14px; padding:20px 22px; margin:30px 0; }
+.keymsg b{ color:var(--purple); }
+.pill{ display:inline-block; background:var(--panel2); border:1px solid var(--border); border-radius:20px; padding:2px 10px; font-size:12px; color:var(--muted); margin-right:6px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>🔗 <span style="color:var(--purple)">this</span>는 어떻게 인스턴스에 연결되는가</h1>
+  <p class="sub">Lox 인터프리터에서 <code>LoxFunction.bind()</code> — <code>Point(3, 4)</code> 한 줄이 실행되며 <b>환경 체인(Environment chain)</b>이 쌓이는 과정</p>
+</header>
+
+<!-- ROADMAP -->
+<div class="panel">
+  <div class="roadmap">
+    <div class="rm-node"><b>문제</b><br>메서드 안 <code>this</code>가<br>어느 인스턴스인지?</div>
+    <span class="rm-arrow">→</span>
+    <div class="rm-node"><b>아이디어</b><br><code>this</code>를 특별 취급 말고<br>그냥 <b>변수</b>로 두자</div>
+    <span class="rm-arrow">→</span>
+    <div class="rm-node"><b>메커니즘</b><br><code>bind()</code>가 <code>"this"</code> 담긴<br>중간 환경을 끼워넣음</div>
+    <span class="rm-arrow">→</span>
+    <div class="rm-node"><b>해결</b><br>렉시컬 스코프로<br><code>this</code> 조회</div>
+  </div>
+</div>
+
+<!-- WHY -->
+<h2>① 왜 이게 필요한가 — 문제 상황</h2>
+<div class="panel">
+  <p style="margin-top:0">메서드는 클래스에 <b>딱 하나만</b> 저장됩니다. 그런데 인스턴스는 여러 개죠.</p>
+  <div class="codebox" style="margin-bottom:0">
+<span class="ln"><span class="kw">class</span> <span class="ty">Point</span> { <span class="fn">init</span>(x, y) { <span class="kw">this</span>.x = x; } }</span>
+<span class="ln"><span class="kw">var</span> a = <span class="ty">Point</span>(<span class="va">1</span>, <span class="va">2</span>); <span class="cm">// 같은 init 메서드를 쓰는데</span></span>
+<span class="ln"><span class="kw">var</span> b = <span class="ty">Point</span>(<span class="va">9</span>, <span class="va">9</span>); <span class="cm">// this는 b를 가리켜야 함</span></span>
+  </div>
+  <p style="margin-bottom:0" class="muted">→ 똑같은 <code>init</code> 코드인데, 호출할 때마다 <code>this</code>가 <b>다른 인스턴스</b>를 가리켜야 한다. 어떻게? 답: 메서드 본문을 실행하기 직전에, <code>this</code>가 정의된 환경을 <b>그때그때 끼워넣는다</b>.</p>
+</div>
+
+<!-- HOW : interactive -->
+<h2>② 해결 메커니즘 — 단계별로 환경이 쌓이는 과정</h2>
+<div class="controls">
+  <button id="nextBtn" onclick="next()">▶ 다음 단계</button>
+  <button class="ghost" onclick="reset()">↺ 처음으로</button>
+  <div class="stepdot" id="dots"></div>
+</div>
+
+<div class="narr" id="narr">
+  <span class="stepnum">START</span>
+  <h4>준비됨</h4>
+  <p><b>다음 단계</b>를 눌러 <code>Point(3, 4)</code> 실행을 따라가 보세요.</p>
+</div>
+
+<div class="demo" style="margin-top:18px">
+  <!-- left: code -->
+  <div class="panel">
+    <div class="muted" style="font-size:12px; margin-bottom:8px">실행되는 인터프리터 코드</div>
+    <div class="codebox" id="code">
+<span class="ln" data-s="1"><span class="cm">// 1) class Point 정의 시</span></span>
+<span class="ln" data-s="1"><span class="kw">new</span> <span class="ty">LoxFunction</span>(initDecl, <span class="va">closure</span>);</span>
+<span class="ln"> </span>
+<span class="ln" data-s="2"><span class="cm">// 2) Point(3,4) → LoxClass.call()</span></span>
+<span class="ln" data-s="2"><span class="ty">LoxInstance</span> inst = <span class="kw">new</span> <span class="ty">LoxInstance</span>(<span class="kw">this</span>);</span>
+<span class="ln"> </span>
+<span class="ln" data-s="3"><span class="cm">// 3) bind: this 담은 환경 끼우기</span></span>
+<span class="ln" data-s="3">env = <span class="kw">new</span> <span class="ty">Environment</span>(<span class="va">closure</span>);</span>
+<span class="ln" data-s="3">env.<span class="fn">define</span>(<span class="st">"this"</span>, inst);</span>
+<span class="ln" data-s="3"><span class="kw">return</span> <span class="kw">new</span> <span class="ty">LoxFunction</span>(decl, env);</span>
+<span class="ln"> </span>
+<span class="ln" data-s="4"><span class="cm">// 4) 그 함수.call() → 본문 환경</span></span>
+<span class="ln" data-s="4">env = <span class="kw">new</span> <span class="ty">Environment</span>(<span class="va">closure</span>);</span>
+<span class="ln" data-s="4">env.<span class="fn">define</span>(<span class="st">"x"</span>, <span class="va">3</span>); env.<span class="fn">define</span>(<span class="st">"y"</span>, <span class="va">4</span>);</span>
+<span class="ln"> </span>
+<span class="ln" data-s="5"><span class="cm">// 5) this.x = x 실행</span></span>
+<span class="ln" data-s="5">env.<span class="fn">getAt</span>(distance, <span class="st">"this"</span>);</span>
+<span class="ln" data-s="5">inst.<span class="fn">set</span>(<span class="st">"x"</span>, <span class="va">3</span>);</span>
+    </div>
+  </div>
+
+  <!-- right: env chain -->
+  <div class="panel">
+    <div class="muted" style="font-size:12px; margin-bottom:8px">환경 체인 (아래 = 바깥 스코프)</div>
+    <div class="envstack" id="stack">
+
+      <div class="envbox" id="env-body">
+        <div class="title">[3] 메서드 본문 환경 <span class="tag">call()에서 생성</span></div>
+        <div class="binding"><span class="nm">x</span>=<span class="vl">3</span></div>
+        <div class="binding"><span class="nm">y</span>=<span class="vl">4</span></div>
+      </div>
+      <div class="enc-arrow" id="arr-body">↓ <span class="enc-label">enclosing</span></div>
+
+      <div class="envbox" id="env-bind">
+        <div class="title">[2] bind 환경 <span class="tag">bind()에서 생성</span></div>
+        <div class="binding this-b"><span class="nm">this</span>=<span class="vl">→ inst</span></div>
+      </div>
+      <div class="enc-arrow" id="arr-bind">↓ <span class="enc-label">enclosing</span></div>
+
+      <div class="envbox" id="env-closure">
+        <div class="title">[1] closure <span class="tag">클래스 정의 환경</span></div>
+        <div class="binding"><span class="nm">Point</span>=<span class="vl">LoxClass</span></div>
+      </div>
+    </div>
+
+    <div class="heap">
+      <div class="instbox" id="inst">
+        <div class="title">🧱 LoxInstance (힙)</div>
+        <div class="binding" id="inst-fields"><span class="muted">필드 없음</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- KEY MESSAGE -->
+<div class="keymsg">
+  <div style="font-size:13px; color:var(--muted); margin-bottom:6px">핵심 메시지</div>
+  <p style="margin:0; font-size:16px"><b>this</b>는 인터프리터의 특별한 기능이 아니라 <b>"this"라는 이름의 평범한 변수</b>입니다.
+  <code>bind()</code>가 하는 일은 단 하나 — 메서드 본문보다 <b>한 단계 바깥에</b> <code>"this" = 인스턴스</code>가 정의된 <b>중간 환경을 끼워넣는 것</b>뿐입니다.
+  나머지는 변수 조회와 똑같이 <b>렉시컬 스코프(환경 체인을 위로 거슬러 올라가기)</b>로 해결됩니다.</p>
+</div>
+
+<!-- PREREQ -->
+<h2>③ 알아두면 좋은 선행 개념</h2>
+<div class="cards">
+  <div class="card"><b>Environment</b><br><span class="muted" style="font-size:13px">변수 이름→값 Map + 부모(<code>enclosing</code>) 포인터. 못 찾으면 부모로 올라간다.</span></div>
+  <div class="card"><b>closure</b><br><span class="muted" style="font-size:13px">함수가 "태어난 곳"의 환경. LoxFunction이 들고 다닌다.</span></div>
+  <div class="card"><b>bind가 새 함수를 반환</b><br><span class="muted" style="font-size:13px">원본은 그대로 두고 <code>closure</code>만 바꾼 복제본. 그래서 인스턴스마다 다른 this.</span></div>
+  <div class="card"><b>Resolver의 distance</b><br><span class="muted" style="font-size:13px">"this가 몇 칸 위에 있는지"를 미리 계산. 실행 시 <code>getAt(distance,"this")</code>로 정확히 도달.</span></div>
+</div>
+
+<!-- TRADEOFF -->
+<h2>④ 트레이드오프 — 왜 이 방식?</h2>
+<table>
+  <tr><th>방식</th><th>얻는 것</th><th>잃는 것</th></tr>
+  <tr><td><b>this를 변수로</b> (이 구현)</td><td>인터프리터에 특수 케이스 0개. 클로저·스코프 코드 그대로 재사용. 메서드도 일반 함수처럼 변수처럼 넘길 수 있음.</td><td>호출마다 환경 1개 추가 생성(약간의 비용). bind된 새 LoxFunction 객체 생성.</td></tr>
+  <tr><td>this를 특수 필드/레지스터로</td><td>환경 추가 생성 없음(빠름)</td><td>인터프리터 곳곳에 this 특수 처리 분기. 중첩 클로저에서 this 캡처가 까다로워짐.</td></tr>
+</table>
+
+<!-- CONNECT -->
+<h2>⑤ 다른 언어에서의 같은 패턴</h2>
+<div class="panel">
+  <p style="margin-top:0"><span class="pill">Python</span> <code>obj.method</code>는 "bound method"를 만든다 — 정확히 Lox의 <code>bind()</code>와 같은 발상(<code>self</code>를 미리 묶은 함수 객체).</p>
+  <p><span class="pill">JavaScript</span> <code>fn.bind(obj)</code>는 <code>this</code>를 고정한 <b>새 함수</b>를 반환한다 — 이름까지 똑같다.</p>
+  <p style="margin-bottom:0"><span class="pill">결론</span> "메서드 = 리시버가 미리 묶인 함수"라는 같은 아이디어를, Lox는 <b>환경 체인에 변수 하나 끼워넣기</b>로 가장 단순하게 구현한 것.</p>
+</div>
+
+</div>
+
+<script>
+const steps = [
+  {
+    n:"STEP 1", t:"class Point 정의 — 메서드는 closure만 안다",
+    html:'클래스를 정의하면 <code>init</code> 메서드가 <span class="key">LoxFunction</span>으로 만들어집니다. 이때 함수가 들고 있는 환경은 <span class="key">closure</span>(클래스가 정의된 환경)뿐. 아직 <code>this</code>는 없습니다 — 어떤 인스턴스에 묶일지 모르니까요.',
+    show:["env-closure"], flash:["env-closure"]
+  },
+  {
+    n:"STEP 2", t:"Point(3,4) 호출 — 빈 인스턴스부터 생성",
+    html:'<code>Point(3,4)</code>는 <span class="key">LoxClass.call()</span>로 들어가고, 가장 먼저 <span class="key">빈 LoxInstance</span>를 만듭니다. 아직 필드는 비어 있습니다. 이 인스턴스가 곧 <code>this</code>가 될 주인공입니다.',
+    show:["env-closure","inst"], flash:["inst"]
+  },
+  {
+    n:"STEP 3", t:"bind() — 'this' 담은 중간 환경을 끼워넣는다 ★",
+    html:'<span class="key">initializer.bind(inst)</span> 호출. closure를 부모로 하는 <span class="key">새 환경[2]</span>을 만들고 거기에 <code><span style="color:var(--purple)">"this" = inst</span></code>를 정의합니다. 그리고 이 환경을 closure로 갖는 <b>새 LoxFunction</b>을 반환. <b>바로 이게 bind의 전부입니다.</b>',
+    show:["env-closure","inst","env-bind","arr-bind"], flash:["env-bind"]
+  },
+  {
+    n:"STEP 4", t:"본문 실행 — 파라미터용 환경이 그 위에 또 쌓인다",
+    html:'bind된 함수의 <span class="key">call()</span>이 실행되며 본문용 <span class="key">환경[3]</span>을 또 만듭니다(<code>x=3, y=4</code>). 이 환경의 부모는 방금 만든 bind 환경[2]. 그래서 <code>this</code>는 본문보다 <b>딱 한 단계 바깥</b>에 위치하게 됩니다.',
+    show:["env-closure","inst","env-bind","arr-bind","env-body","arr-body"], flash:["env-body"]
+  },
+  {
+    n:"STEP 5", t:"this.x = x — 체인을 거슬러 올라가 this를 찾는다",
+    html:'본문에서 <code>this.x = x</code>를 만나면 <span class="key">getAt(distance,"this")</span>로 환경 체인을 위로 올라가 [2]에서 <code>this</code>(=inst)를 찾고, 그 인스턴스에 <code>x=3</code> 필드를 설정합니다. <b>this 조회 = 그냥 변수 조회</b>였던 것!',
+    show:["env-closure","inst","env-bind","arr-bind","env-body","arr-body"],
+    chain:true, setFields:true
+  }
+];
+
+let cur = 0;
+const dotsEl = document.getElementById('dots');
+dotsEl.innerHTML = steps.map(()=>'<span></span>').join('');
+
+function clearFx(){
+  document.querySelectorAll('.envbox').forEach(e=>e.classList.remove('flash','found'));
+  document.getElementById('inst').classList.remove('flash');
+  document.querySelectorAll('.codebox .ln').forEach(e=>e.classList.remove('active'));
+}
+
+function render(){
+  clearFx();
+  // dots
+  [...dotsEl.children].forEach((d,i)=> d.classList.toggle('on', i < cur));
+  if(cur===0){
+    document.querySelectorAll('.envbox,.enc-arrow,#inst').forEach(e=>e.classList.remove('show'));
+    document.getElementById('inst-fields').innerHTML='<span class="muted">필드 없음</span>';
+    document.getElementById('narr').innerHTML='<span class="stepnum">START</span><h4>준비됨</h4><p><b>다음 단계</b>를 눌러 <code>Point(3, 4)</code> 실행을 따라가 보세요.</p>';
+    document.getElementById('nextBtn').disabled=false;
+    document.getElementById('nextBtn').textContent='▶ 다음 단계';
+    return;
+  }
+  const s = steps[cur-1];
+  // visibility
+  ["env-closure","env-bind","env-body","arr-bind","arr-body","inst"].forEach(id=>{
+    document.getElementById(id).classList.toggle('show', s.show.includes(id));
+  });
+  // code highlight
+  document.querySelectorAll('.codebox .ln[data-s="'+cur+'"]').forEach(e=>e.classList.add('active'));
+  // flash
+  (s.flash||[]).forEach(id=> document.getElementById(id).classList.add('flash'));
+  // narration
+  document.getElementById('narr').innerHTML =
+    '<span class="stepnum">'+s.n+'</span><h4>'+s.t+'</h4><p>'+s.html+'</p>';
+
+  if(s.setFields){
+    document.getElementById('inst-fields').innerHTML='<span class="nm">x</span>=<span class="vl">3</span> &nbsp; <span class="nm">y</span>=<span class="vl">4</span>';
+  } else {
+    document.getElementById('inst-fields').innerHTML='<span class="muted">필드 없음</span>';
+  }
+
+  // step5: animate the lookup walking the chain
+  if(s.chain){
+    const seq = ['env-body','env-bind'];
+    seq.forEach((id,i)=>{
+      setTimeout(()=>{
+        document.getElementById('env-body').classList.remove('found');
+        document.getElementById(id).classList.add(i===seq.length-1?'found':'flash');
+      }, 250 + i*450);
+    });
+    setTimeout(()=> document.getElementById('inst').classList.add('flash'), 250 + seq.length*450);
+  }
+
+  document.getElementById('nextBtn').disabled = (cur===steps.length);
+  document.getElementById('nextBtn').textContent = (cur===steps.length)? '완료 ✓' : '▶ 다음 단계';
+}
+
+function next(){ if(cur<steps.length){ cur++; render(); } }
+function reset(){ cur=0; render(); }
+render();
+</script>
+</body>
+</html>
