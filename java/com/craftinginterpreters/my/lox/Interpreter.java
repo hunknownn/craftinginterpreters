@@ -258,7 +258,15 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
             methods.put(method.name.lexeme, function);
         }
 
-        LoxClass clazz = new LoxClass(stmt.name.lexeme, methods);
+        HashMap<String, LoxFunction> staticMethods = new HashMap<>();
+        for (Stmt.Function staticMethod : stmt.staticMethods) {
+            LoxFunction function = new LoxFunction(staticMethod, environment, false);
+            staticMethods.put(staticMethod.name.lexeme, function);
+        }
+
+        LoxClass metaclass = new LoxClass(null, stmt.name + "$metaclass", staticMethods);
+        LoxClass clazz = new LoxClass(metaclass, stmt.name.lexeme, methods);
+
         environment.assign(stmt.name, clazz);
         return null;
     }

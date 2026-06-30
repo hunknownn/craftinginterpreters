@@ -48,13 +48,16 @@ class Parser {
         consume(LEFT_BRACE, "Expect '{' before class body.");
 
         List<Stmt.Function> methods = new ArrayList<>();
+        List<Stmt.Function> staticMethods = new ArrayList<>();
         while (!check(RIGHT_BRACE) && !isAtEnd()) {
-            methods.add(function("method"));
+            if (match(CLASS)) { // class body 내부의 class 키워드는 static 함수로 간주한다
+                staticMethods.add(function("method"));
+            } else methods.add(function("method"));
         }
 
         consume(RIGHT_BRACE, "Expect '}' after class body");
 
-        return new Stmt.Class(name, methods);
+        return new Stmt.Class(name, methods, staticMethods);
     }
 
     private Stmt statement() {

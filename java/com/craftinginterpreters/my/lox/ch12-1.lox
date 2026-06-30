@@ -1,0 +1,18 @@
+class Math {
+    class square(n) { return n * n; }
+  }
+  print Math.square(3);   // 9
+
+  // (선택) 메타클래스 부수효과 — 클래스 필드
+  Math.pi = 3.14;
+  print Math.pi;          // 3.14
+
+  // 일반 메서드와 공존하는지
+  class Circle {
+    init(r) { this.radius = r; }
+    class describe() { return "a circle class"; }
+    area() { return 3.141592653 * this.radius * this.radius; }
+  }
+  var c = Circle(2);
+  print c.area();             // ~12.566
+  print Circle.describe();    // a circle class
