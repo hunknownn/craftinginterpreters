@@ -215,7 +215,7 @@ class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void> {
     public Object visitGetExpr(Expr.Get expr) {
         Object object = evaluate(expr.object); // . 왼쪽 먼저 실행
         if (object instanceof LoxInstance) {
-            return ((LoxInstance) object).get(expr.name); // 필드 꺼내기
+            return ((LoxInstance) object).get(expr.name, this); // 필드 꺼내기
         }
 
         throw new RuntimeError(expr.name, "Only instances have properties.");

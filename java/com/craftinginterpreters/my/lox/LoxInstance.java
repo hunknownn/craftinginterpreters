@@ -18,14 +18,17 @@ public class LoxInstance {
     }
 
     /** 메서드는 Class가 소유하지만, 그 클래스의 인스턴스를 통하여 access한다. */
-    Object get(Token name) {
+    Object get(Token name, Interpreter interpreter) {
         if (fields.containsKey(name.lexeme)) {
             return fields.get(name.lexeme);
         }
 
         LoxFunction method = clazz.findMethod(name.lexeme);
         // 원본 method가 아니라, [부모=closure + this 지역변수]를 가진 environment를 closure로 삼는 '새 LoxFunction'을 만들어 반환한다
-        if(method != null) return method.bind(this);
+        if(method != null) {
+            if(method.isGetter()) return method.bind(this).call(interpreter, null);
+            return method.bind(this);
+        }
 
         throw new RuntimeError(name, "Undefined property '" + name.lexeme + "'.");
     }
